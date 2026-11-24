@@ -126,6 +126,7 @@ class Api:
         self._barre = None
         self._quitter = False
         self._attente = 0
+        self._reouverture = False
 
     # ------------------------------------------------ outils
     def _js(self, fonction, donnees):
@@ -263,9 +264,22 @@ class Api:
 
     # ------------------------------------------------ fenêtre
     def montrer(self):
-        if self._fenetre:
-            self._fenetre.show()
-            appel_principal(lambda: activer_app())
+        """Réaffiche la fenêtre (masquée ou réduite) et passe l'app au premier plan.
+        Passe directement par AppKit : window.show() de pywebview peut rester bloqué
+        si la fenêtre a démarré masquée."""
+        def f():
+            try:
+                from AppKit import NSApplication
+                from webview.platforms.cocoa import BrowserView
+                i = BrowserView.instances.get(self._fenetre.uid) if self._fenetre else None
+                if i is not None:
+                    if i.window.isMiniaturized():
+                        i.window.deminiaturize_(None)
+                    i.window.makeKeyAndOrderFront_(None)
+                NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+            except Exception:
+                traceback.print_exc()
+        appel_principal(f)
 
     def quitter(self):
         self._quitter = True
@@ -525,12 +539,17 @@ def creer_barre_menus(api):
         import objc
         from webview.platforms.cocoa import BrowserView
 
-        class Reouverture(objc.Category(BrowserView.AppDelegate)):
+        # PyObjC exige que la catégorie porte le nom de la classe qu'elle complète
+        class AppDelegate(objc.Category(BrowserView.AppDelegate)):
+            @objc.typedSelector(b"Z@:@Z")
             def applicationShouldHandleReopen_hasVisibleWindows_(self, app, visibles):
                 api.montrer()
                 return True
+
+        api._reouverture = True
     except Exception as e:
         print("réouverture Dock :", e, flush=True)
+        api._reouverture = False
 
 
 def au_demarrage(fenetre, api):
@@ -543,9 +562,22 @@ def au_demarrage(fenetre, api):
 
 def sur_fermeture(fenetre, api):
     """Fermer la fenêtre la masque : la surveillance continue (Quitter : Cmd+Q ou barre des menus)."""
-    if api._quitter or api._barre is None:
+    if api._quitter:
         return True
-    threading.Timer(0.05, fenetre.hide).start()
+
+    def masquer():
+        try:
+            from webview.platforms.cocoa import BrowserView
+            i = BrowserView.instances.get(fenetre.uid)
+            if i is None:
+                return
+            if api._reouverture:
+                i.window.orderOut_(None)        # masquée : le clic sur le Dock la réaffiche
+            else:
+                i.window.miniaturize_(None)     # secours : réduite dans le Dock, toujours récupérable
+        except Exception:
+            traceback.print_exc()
+    appel_principal(masquer)
     return False
 
 

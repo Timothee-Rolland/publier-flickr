@@ -12,8 +12,10 @@ import flickrapi
 
 ICI = Path(__file__).resolve().parent
 CONFIG = ICI / "config.ini"
-EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff", ".heic",
-              ".mp4", ".mov", ".m4v"}
+IMAGES = {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff", ".heic", ".heif"}
+VIDEOS = {".mp4", ".mov", ".m4v", ".avi", ".wmv", ".mpg", ".mpeg", ".3gp",
+          ".mts", ".m2ts", ".ogv"}  # formats acceptés par Flickr
+EXTENSIONS = IMAGES | VIDEOS
 SUIVI = ".flickr_suivi.json"
 
 
@@ -141,8 +143,10 @@ def analyser(chemin):
             "commune": suivi.get("commune", ""),
             "public": suivi.get("public"),
             "album_id": suivi.get("album_id"),
-            "apercu": [str(p) for p in ph[:4] if p.suffix.lower() in
-                       {".jpg", ".jpeg", ".png", ".gif"}],
+            "apercu": [str(p) for p in ph[:4]],
+            "fichiers": [{"nom": p.name, "chemin": str(p),
+                          "video": p.suffix.lower() in VIDEOS,
+                          "deja": p.name in deja} for p in ph],
         })
     return {"racine": str(racine), "nom": racine.name, "albums": albums}
 
@@ -301,7 +305,8 @@ class Flickr:
             sauver()
 
         photos = photos_de(dossier)
-        a_envoyer = [p for p in photos if p.name not in envoyees]
+        exclus = set(album.get("exclus") or [])  # décochés dans la galerie
+        a_envoyer = [p for p in photos if p.name not in envoyees and p.name not in exclus]
         echecs = []
         for i, p in enumerate(a_envoyer, 1):
             if arret():

@@ -44,8 +44,29 @@ button.lien{border:none;background:none;color:var(--accent);padding:0}
 .bloc h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--doux);font-weight:600}
 .album{display:grid;grid-template-columns:120px 1fr;gap:18px}
 .album.exclu{opacity:.45}
-.vignettes{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start}
+.vignettes{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start;position:relative;cursor:pointer;border-radius:8px}
 .vignettes div{aspect-ratio:1;border-radius:6px;background:var(--bg) center/cover no-repeat}
+.vignettes .voir{position:absolute;inset:0;aspect-ratio:auto;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:600;text-align:center;opacity:0;transition:.15s;padding:6px}
+.vignettes:hover .voir{opacity:1}
+.galerie{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column}
+.g-tete{display:flex;align-items:center;gap:10px;padding:14px 22px;border-bottom:1px solid var(--bord);background:var(--carte)}
+.g-titre{flex:1;display:flex;flex-direction:column}
+.g-titre span{font-size:12px;color:var(--doux)}
+.g-grille{flex:1;overflow:auto;padding:18px 22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start}
+.tuile{position:relative;border-radius:10px;overflow:hidden;background:var(--carte);border:2px solid var(--accent);cursor:pointer;transition:.12s}
+.tuile .img{aspect-ratio:1;background:var(--bord) center/cover no-repeat}
+.tuile .nom{font-size:11px;color:var(--doux);padding:4px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tuile .coche{position:absolute;top:7px;right:7px;width:22px;height:22px;border-radius:50%;background:var(--accent);
+  color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.tuile .coche::after{content:"✓"}
+.tuile.non{border-color:transparent;opacity:.45}
+.tuile.non .coche{background:rgba(255,255,255,.85)}
+.tuile.non .coche::after{content:""}
+.tuile.deja{border-color:transparent;cursor:default}
+.tuile .badge{position:absolute;left:7px;top:7px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:rgba(0,0,0,.6);color:#fff}
+.tuile .badge.ok{background:var(--ok)}
+.g-aide{font-size:12px;color:var(--doux);padding:0 22px 12px}
 .ligne{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .ligne label{font-size:12px;color:var(--doux);width:88px;flex:none}
 .ligne > input,.ligne > textarea{flex:1;min-width:180px}
@@ -240,7 +261,7 @@ function surAnalyse(r){
   S.commun = [...S.etat.tags_defaut];
   const communs=new Set(S.commun.map(cle));
   S.albums = r.albums.map(a=>({...a, inclus:true, tags:a.tags.filter(t=>!communs.has(cle(t))),
-      public: a.public===null||a.public===undefined ? S.etat.public_defaut : a.public, cible:null}));
+      public: a.public===null||a.public===undefined ? S.etat.public_defaut : a.public, cible:null, exclus:new Set()}));
   rendreAlbums();
 }
 function rendreAlbums(){
@@ -287,12 +308,13 @@ function rendreListe(){
     const supprime = charges && a.album_id && !S.albumsFlickr.some(x=>x.id===a.album_id);
     const homonyme = cible==="nouveau" && S.albumsFlickr.find(x=>x.titre.trim().toLowerCase()===a.titre.trim().toLowerCase());
     d.innerHTML = `
-      <div class="vignettes">${[0,1,2,3].map(j=>`<div data-v="${j}"></div>`).join("")}</div>
+      <div class="vignettes" title="Voir et choisir les fichiers">${[0,1,2,3].map(j=>`<div data-v="${j}"></div>`).join("")}
+        <div class="voir">Voir les ${a.nb} fichiers<br>et choisir</div></div>
       <div>
         <div class="ligne"><input type="text" class="titre" value="${esc(a.titre)}">
           <label class="case" style="width:auto"><input type="checkbox" class="inclus" ${a.inclus?"checked":""}> Publier</label></div>
         <div class="meta">${a.relatif==="."?"Dossier principal":esc(a.relatif)} · ${a.nb} fichier${a.nb>1?"s":""}
-          ${a.deja?` · <b>${a.deja} déjà en ligne</b>`:""}</div>
+          ${a.deja?` · <b>${a.deja} déjà en ligne</b>`:""}${a.exclus.size?` · <span style="color:var(--nouveau)">${aEnvoyer(a)} sélectionné${aEnvoyer(a)>1?"s":""} sur ${a.nb-a.deja}</span>`:""}</div>
         <div class="ligne"><label>Album Flickr</label>
           <select class="cible">
             <option value="nouveau" ${cible==="nouveau"?"selected":""}>➕ Créer un nouvel album</option>
@@ -322,14 +344,81 @@ function rendreListe(){
     d.querySelectorAll(".vis").forEach(b=>b.onclick=()=>{a.public=b.dataset.p==="1";
       d.querySelectorAll(".vis").forEach(x=>x.classList.toggle("actif",x===b))});
     champTags(d.querySelector(".t"), a.tags);
-    a.apercu.forEach(async(p,j)=>{const u=await pywebview.api.apercu(p);
+    d.querySelector(".vignettes").onclick=()=>ouvrirGalerie(i);
+    a.apercu.forEach(async(p,j)=>{const u=await pywebview.api.apercu(p,240);
       if(u){const v=d.querySelector(`[data-v="${j}"]`); if(v) v.style.backgroundImage=`url(${u})`}});
   });
 }
+/* ---------- galerie : choisir les fichiers à envoyer ---------- */
+function aEnvoyer(a){ return a.fichiers.filter(f=>!f.deja && !a.exclus.has(f.nom)).length; }
+const fileApercus=[]; let apercusEnCours=0;
+function chargerApercu(chemin, el){
+  fileApercus.push([chemin,el]); pomperApercus();
+}
+function pomperApercus(){
+  while(apercusEnCours<6 && fileApercus.length){
+    const [chemin,el]=fileApercus.shift();
+    if(!el.isConnected) continue;
+    apercusEnCours++;
+    pywebview.api.apercu(chemin,320).then(u=>{ if(u) el.style.backgroundImage=`url(${u})` })
+      .finally(()=>{ apercusEnCours--; pomperApercus(); });
+  }
+}
+function ouvrirGalerie(i){
+  if(S.enCours) return toast("Publication en cours : attendez la fin");
+  const a=S.albums[i]; let dernier=null;
+  const g=document.createElement("div"); g.className="galerie";
+  g.innerHTML=`<div class="g-tete">
+      <div class="g-titre"><b>${esc(a.titre)}</b><span class="g-compte"></span></div>
+      <button data-act="tout">Tout sélectionner</button>
+      <button data-act="rien">Tout désélectionner</button>
+      <button class="primaire" data-act="ok">Terminé</button></div>
+    <div class="g-grille">${a.fichiers.map((f,j)=>`
+      <div class="tuile ${f.deja?"deja":""}" data-j="${j}" title="${esc(f.nom)}">
+        <div class="img"></div>
+        ${f.deja?`<span class="badge ok">En ligne</span>`:`<span class="coche"></span>`}
+        ${f.video&&!f.deja?`<span class="badge">▶ Vidéo</span>`:""}
+        <div class="nom">${f.video&&f.deja?"▶ ":""}${esc(f.nom)}</div></div>`).join("")}</div>
+    <div class="g-aide">Cliquez sur un fichier pour l'inclure ou l'exclure · Maj+clic : sélectionner une plage · Échap : fermer</div>`;
+  document.body.appendChild(g);
+  const tuiles=[...g.querySelectorAll(".tuile")];
+  function maj(){
+    tuiles.forEach(t=>{const f=a.fichiers[+t.dataset.j]; if(!f.deja) t.classList.toggle("non",a.exclus.has(f.nom))});
+    const choix=aEnvoyer(a), dispo=a.fichiers.filter(f=>!f.deja).length;
+    g.querySelector(".g-compte").textContent=`${choix} sur ${dispo} à envoyer`+
+      (a.deja?` · ${a.deja} déjà en ligne`:"");
+  }
+  function basculer(j, valeur){
+    const f=a.fichiers[j]; if(f.deja) return;
+    const exclure = valeur===undefined ? !a.exclus.has(f.nom) : valeur;
+    exclure ? a.exclus.add(f.nom) : a.exclus.delete(f.nom);
+  }
+  g.querySelector(".g-grille").onclick=e=>{
+    const t=e.target.closest(".tuile"); if(!t) return;
+    const j=+t.dataset.j;
+    if(e.shiftKey && dernier!==null){
+      const exclure=a.exclus.has(a.fichiers[dernier].nom);
+      for(let k=Math.min(dernier,j);k<=Math.max(dernier,j);k++) basculer(k,exclure);
+    } else basculer(j);
+    dernier=j; maj();
+  };
+  function fermer(){ g.remove(); document.removeEventListener("keydown",clavier); rendreListe(); resume(); }
+  function clavier(e){ if(e.key==="Escape") fermer(); }
+  document.addEventListener("keydown",clavier);
+  g.querySelector('[data-act="tout"]').onclick=()=>{a.exclus.clear();maj()};
+  g.querySelector('[data-act="rien"]').onclick=()=>{a.fichiers.forEach(f=>{if(!f.deja)a.exclus.add(f.nom)});maj()};
+  g.querySelector('[data-act="ok"]').onclick=fermer;
+  // miniatures chargées au fil du défilement
+  const obs=new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){
+      const t=en.target; obs.unobserve(t); chargerApercu(a.fichiers[+t.dataset.j].chemin, t.querySelector(".img")); }}),
+    {root:g.querySelector(".g-grille"), rootMargin:"300px"});
+  tuiles.forEach(t=>obs.observe(t));
+  maj();
+}
 function resume(){
   const inc=S.albums.filter(a=>a.inclus);
-  const n=inc.reduce((s,a)=>s+a.nb-a.deja,0);
-  $("#resume").textContent = `${inc.length} album${inc.length>1?"s":""} · ${n} photo${n>1?"s":""} à envoyer`;
+  const n=inc.reduce((s,a)=>s+aEnvoyer(a),0);
+  $("#resume").textContent = `${inc.length} album${inc.length>1?"s":""} · ${n} fichier${n>1?"s":""} à envoyer`;
   $("#btnPublier").disabled = !inc.length || !S.moi || S.enCours;
   $("#btnPublier").textContent = S.moi ? "Publier" : "Connectez-vous d'abord";
 }
@@ -340,7 +429,7 @@ $("#btnPublier").onclick=()=>{
   file = S.albums.map((a,i)=>({a,i})).filter(x=>x.a.inclus);
   if(!file.length) return;
   const albums = file.map(({a})=>({chemin:a.chemin, titre:a.titre, description:a.description,
-      commune:a.commune, public:a.public, cible:cibleDe(a),
+      commune:a.commune, public:a.public, cible:cibleDe(a), exclus:[...a.exclus],
       tags:[...S.commun, ...a.tags.filter(t=>!S.commun.some(c=>cle(c)===cle(t)))]}));
   S.enCours=true; resume(); $("#btnArret").style.display="";
   document.querySelectorAll("#liste input,#liste textarea,#liste button,#liste select").forEach(e=>e.disabled=true);
@@ -375,7 +464,7 @@ async function surTermine(bilan){
   S.albums = r.albums.map(a=>{const p=saisies.find(x=>x.chemin===a.chemin)||{};
     return {...a, inclus:p.inclus??true, tags:p.tags??[...a.tags], titre:p.titre??a.titre,
       description:p.description??a.description, commune:p.commune??a.commune,
-      public:p.public??S.etat.public_defaut, cible:null}});
+      public:p.public??S.etat.public_defaut, cible:null, exclus:p.exclus??new Set()}});
   const anciens=[...document.querySelectorAll(".suivi")].map(x=>x.innerHTML);
   rendreListe(); document.querySelectorAll(".suivi").forEach((x,k)=>x.innerHTML=anciens[k]||"");
   resume();

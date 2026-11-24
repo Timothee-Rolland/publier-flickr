@@ -1,6 +1,13 @@
 """Publier sur Flickr — mini-app (fenêtre native via pywebview)."""
+import base64
+import hashlib
 import json
+import shutil
+import subprocess
+import sys
+import tempfile
 import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -122,20 +129,64 @@ class Api:
         import webbrowser
         webbrowser.open(url)
 
-    def apercu(self, chemin):
-        """Miniature en data-URL (les fichiers locaux ne sont pas accessibles directement)."""
-        import base64
-        try:
-            from PIL import Image
-            import io
-            im = Image.open(chemin)
-            im.thumbnail((240, 240))
-            buf = io.BytesIO()
-            im.convert("RGB").save(buf, "JPEG", quality=70)
-            data = buf.getvalue()
-        except Exception:
+    def apercu(self, chemin, taille=320):
+        """Miniature (data-URL) d'une photo ou d'une vidéo, mise en cache."""
+        f = miniature(Path(chemin), int(taille))
+        if not f:
             return None
-        return "data:image/jpeg;base64," + base64.b64encode(data).decode()
+        return "data:image/jpeg;base64," + base64.b64encode(f.read_bytes()).decode()
+
+
+CACHE = ICI / "cache"
+
+
+def miniature(p, taille):
+    """Fichier JPEG miniature en cache ; Pillow pour les photos, Coup d'œil (qlmanage)
+    pour les vidéos, le HEIC et le reste."""
+    try:
+        st = p.stat()
+    except OSError:
+        return None
+    cle = hashlib.sha1(f"{p}|{st.st_mtime_ns}|{st.st_size}|{taille}".encode()).hexdigest()
+    sortie = CACHE / f"{cle}.jpg"
+    if sortie.exists():
+        return sortie
+    CACHE.mkdir(exist_ok=True)
+    from PIL import Image, ImageOps
+    if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff"}:
+        try:
+            im = Image.open(p)
+            im.draft("RGB", (taille * 2, taille * 2))  # décodage JPEG réduit : rapide
+            im = ImageOps.exif_transpose(im)
+            im.thumbnail((taille, taille))
+            im.convert("RGB").save(sortie, "JPEG", quality=75)
+            return sortie
+        except Exception:
+            pass
+    if sys.platform == "darwin":
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            subprocess.run(["qlmanage", "-t", "-s", str(taille), "-o", str(tmp), str(p)],
+                           capture_output=True, timeout=30)
+            png = next(tmp.glob("*.png"), None)
+            if png:
+                Image.open(png).convert("RGB").save(sortie, "JPEG", quality=75)
+                return sortie
+        except Exception:
+            pass
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    return None
+
+
+def nettoyer_cache(jours=30):
+    limite = time.time() - jours * 86400
+    for f in CACHE.glob("*.jpg") if CACHE.exists() else []:
+        try:
+            if f.stat().st_atime < limite:
+                f.unlink()
+        except OSError:
+            pass
 
 
 def identite_macos():
@@ -162,6 +213,7 @@ def brancher_depot(fenetre, api):
 
 def main():
     identite_macos()
+    threading.Thread(target=nettoyer_cache, daemon=True).start()
     api = Api()
     fenetre = webview.create_window(
         "Publier sur Flickr", url=str(ICI / "ui.html"), js_api=api,

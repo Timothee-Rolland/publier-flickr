@@ -5,7 +5,17 @@ glisser-déposer d'un dossier, **un album par sous-dossier**, titre, description
 (localisation), **tags avec suggestion des tags déjà utilisés sur le compte**,
 visibilité privée (par défaut) ou publique, ajout à un album existant, reprise après interruption.
 
-## Installation (une ligne dans le Terminal)
+## Installation (utilisateurs)
+
+1. Télécharger [Publier-sur-Flickr.zip](https://github.com/Timothee-Rolland/publier-flickr/releases/latest/download/Publier-sur-Flickr.zip) et le décompresser.
+2. Double-cliquer sur l'app. Python et tous les composants sont inclus : rien à installer.
+3. La première fois seulement : autoriser l'app dans Réglages Système → Confidentialité et sécurité
+   → « Ouvrir quand même » (l'app n'est pas signée par Apple), puis saisir la clé Flickr.
+
+Le zip est construit automatiquement à chaque release par GitHub Actions
+(`.github/workflows/zip-autonome.yml`, script `scripts/construire_zip_autonome.sh`).
+
+## Installation alternative (une ligne dans le Terminal)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Timothee-Rolland/publier-flickr/main/installer.sh | bash

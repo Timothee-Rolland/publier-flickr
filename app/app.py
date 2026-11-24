@@ -146,9 +146,11 @@ def identite_macos():
         info = NSBundle.mainBundle().infoDictionary()
         if info is not None:
             info["CFBundleName"] = "Publier sur Flickr"
+        appli = NSApplication.sharedApplication()
+        appli.setActivationPolicy_(0)  # app « normale » : Dock, menu, premier plan
         image = NSImage.alloc().initWithContentsOfFile_(str(ICI / "icone.png"))
         if image is not None:
-            NSApplication.sharedApplication().setApplicationIconImage_(image)
+            appli.setApplicationIconImage_(image)
     except Exception as e:  # hors macOS ou PyObjC indisponible : sans conséquence
         print("identité macOS :", e, flush=True)
 

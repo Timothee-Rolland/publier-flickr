@@ -1,27 +1,30 @@
 PUBLIER SUR FLICKR — installation
 
-1. Ouvrir le Terminal (Cmd+Espace, taper « Terminal », Entrée).
+1. Télécharger le zip :
+   https://github.com/Timothee-Rolland/publier-flickr/releases/latest/download/Publier-sur-Flickr.zip
+   puis double-cliquer dessus pour le décompresser.
 
-2. Coller cette ligne, puis Entrée :
+2. (Conseillé) Glisser « Publier sur Flickr » dans le dossier Applications,
+   puis dans le Dock pour l'avoir sous la main.
 
-   curl -fsSL https://raw.githubusercontent.com/Timothee-Rolland/publier-flickr/main/installer.sh | bash
+3. Double-cliquer sur l'app. Rien à installer : tout est inclus.
 
-   L'installation prend 1 à 3 minutes. L'app est placée dans Applications,
-   son icône est ajoutée au Dock, puis elle s'ouvre toute seule.
+   La toute première fois seulement, macOS bloque l'ouverture
+   (« Apple ne peut pas vérifier… ») :
+   - macOS 15 et plus : cliquer « OK », puis Réglages Système →
+     Confidentialité et sécurité → en bas, « Ouvrir quand même » ;
+   - macOS 14 et avant : clic droit sur l'app → Ouvrir → Ouvrir.
 
-3. Au premier lancement :
-   - coller la clé et le secret Flickr du groupe (à demander au responsable du compte),
-     puis « Vérifier et enregistrer » ;
-   - Flickr s'ouvre dans le navigateur : se connecter avec le compte du groupe
-     et cliquer sur « OK, I'll authorize it ».
+4. Au premier lancement, l'app demande la clé et le secret Flickr du groupe
+   (à demander au responsable du compte), puis ouvre Flickr dans le navigateur :
+   se connecter avec le compte du groupe et cliquer « OK, I'll authorize it ».
 
-C'est tout. Ensuite : cliquer sur l'icône dans le Dock.
-Les mises à jour s'installent toutes seules au lancement.
+C'est tout. Les mises à jour s'installent toutes seules au lancement.
 
 Utilisation : glisser un dossier de photos dans la fenêtre. Un album par sous-dossier.
 Les photos sont envoyées en privé par défaut.
 
-Si les photos sont sur le Bureau et que l'app ne les voit pas :
+Si l'app ne voit pas des photos posées sur le Bureau :
 mettre le dossier ailleurs (Images, Documents…).
 
 En cas de problème : envoyer le fichier

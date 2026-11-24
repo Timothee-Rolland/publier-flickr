@@ -36,9 +36,31 @@ if [ ! -f "$SUP/app.py" ] || plus_recente "$V_APP" "$V_SUP"; then
 fi
 [ -f "$SUP/config.ini" ] || cp "$RES/config.ini" "$SUP/config.ini" 2>>"$JOURNAL"
 
-# 2. Composants Python (une seule fois, ou si la liste change)
-PY="$SUP/.venv/bin/python3"
-if ! "$PY" -c "import webview, flickrapi, PIL" >>"$JOURNAL" 2>&1; then
+# 2. Python et composants
+if [ -f "$RES/runtime/VERSION" ]; then
+  # App autonome : Python embarqué, recopié hors quarantaine dans Application Support
+  [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && ARCH=arm64 || ARCH=x86_64
+  ATTENDU="$(cat "$RES/runtime/VERSION")-$ARCH"
+  PY="$SUP/runtime/bin/python3"
+  if [ "$(cat "$SUP/runtime/VERSION" 2>/dev/null)" != "$ATTENDU" ] \
+     || ! "$PY" -c "import webview, flickrapi, PIL" >>"$JOURNAL" 2>&1; then
+    notifier "Préparation au premier lancement (quelques secondes)…"
+    rm -rf "$SUP/runtime.nouveau"
+    if ditto --noqtn "$RES/runtime/$ARCH" "$SUP/runtime.nouveau" 2>>"$JOURNAL"; then
+      xattr -dr com.apple.quarantine "$SUP/runtime.nouveau" 2>/dev/null
+      echo "$ATTENDU" > "$SUP/runtime.nouveau/VERSION"
+      rm -rf "$SUP/runtime" && mv "$SUP/runtime.nouveau" "$SUP/runtime"
+    else
+      alerte "Préparation impossible. Détails : ~/Library/Application Support/Publier sur Flickr/journal.txt"
+      exit 1
+    fi
+  fi
+  # une mise à jour peut ajouter un composant
+  if ! "$PY" -c "import webview, flickrapi, PIL" >>"$JOURNAL" 2>&1; then
+    "$PY" -m pip install -r "$SUP/requirements.txt" >>"$JOURNAL" 2>&1
+  fi
+elif PY="$SUP/.venv/bin/python3"; ! "$PY" -c "import webview, flickrapi, PIL" >>"$JOURNAL" 2>&1; then
+  # App légère (sans Python embarqué) : environnement créé au premier lancement
   notifier "Installation des composants (1 à 3 minutes, une seule fois)…"
   [ -x "$PY" ] || python3 -m venv "$SUP/.venv" >>"$JOURNAL" 2>&1
   if ! "$PY" -m pip install --upgrade pip -r "$SUP/requirements.txt" >>"$JOURNAL" 2>&1; then
@@ -81,4 +103,5 @@ if [ ! -f "$SUP/app.py" ]; then
   alerte "Programme introuvable. Détails : ~/Library/Application Support/Publier sur Flickr/journal.txt"
   exit 1
 fi
+export SSL_CERT_FILE="$("$PY" -c 'import certifi; print(certifi.where())' 2>/dev/null)"
 cd "$SUP" && exec "$PY" "$SUP/app.py" >>"$JOURNAL" 2>&1

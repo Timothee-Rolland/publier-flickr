@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Publier sur Flickr</title>
+<style>
+:root{
+  --bg:#f5f5f7; --carte:#fff; --texte:#1d1d1f; --doux:#6e6e73; --bord:#e3e3e8;
+  --accent:#2f6fde; --accent-doux:#e8f0fd; --ok:#1f9d55; --ok-doux:#e5f6ec;
+  --nouveau:#c2610c; --nouveau-doux:#fdf0e3; --erreur:#d33a2c; --rayon:12px;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#1c1c1e; --carte:#2c2c2e; --texte:#f2f2f7; --doux:#a1a1a6; --bord:#3a3a3c;
+  --accent:#5b95f5; --accent-doux:#24324a; --ok:#3fc27a; --ok-doux:#1f3a2b;
+  --nouveau:#f0a04b; --nouveau-doux:#3d2c1a;}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;
+  background:var(--bg);color:var(--texte);display:flex;flex-direction:column;-webkit-user-select:none;user-select:none}
+input,textarea{-webkit-user-select:text;user-select:text}
+header{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--bord);background:var(--carte)}
+header h1{font-size:16px;margin:0;font-weight:600;flex:1}
+.logo{width:26px;height:26px;display:flex;gap:3px;align-items:center}
+.logo i{width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.logo i+i{background:#e5487b}
+.compte{font-size:13px;color:var(--doux);display:flex;align-items:center;gap:8px}
+.pastille{width:8px;height:8px;border-radius:50%;background:var(--doux)}
+.pastille.on{background:var(--ok)}
+main{flex:1;overflow:auto;padding:22px}
+footer{padding:14px 22px;border-top:1px solid var(--bord);background:var(--carte);display:flex;align-items:center;gap:14px}
+footer .resume{flex:1;color:var(--doux)}
+button{font:inherit;border:1px solid var(--bord);background:var(--carte);color:var(--texte);
+  padding:7px 14px;border-radius:8px;cursor:pointer}
+button:hover{border-color:var(--doux)}
+button.primaire{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+button.primaire:disabled{opacity:.45;cursor:default}
+button.lien{border:none;background:none;color:var(--accent);padding:0}
+.depot{border:2px dashed var(--bord);border-radius:18px;height:100%;min-height:360px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;color:var(--doux);text-align:center;transition:.15s}
+.depot.survol{border-color:var(--accent);background:var(--accent-doux);color:var(--accent)}
+.depot .grand{font-size:20px;font-weight:600;color:var(--texte)}
+.depot svg{opacity:.5}
+.barre{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.barre h2{margin:0;font-size:18px;flex:1}
+.bloc{background:var(--carte);border:1px solid var(--bord);border-radius:var(--rayon);padding:16px 18px;margin-bottom:14px}
+.bloc h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--doux);font-weight:600}
+.album{display:grid;grid-template-columns:120px 1fr;gap:18px}
+.album.exclu{opacity:.45}
+.vignettes{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start}
+.vignettes div{aspect-ratio:1;border-radius:6px;background:var(--bg) center/cover no-repeat}
+.ligne{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.ligne label{font-size:12px;color:var(--doux);width:88px;flex:none}
+.ligne > input,.ligne > textarea{flex:1;min-width:180px}
+input[type=text],textarea{font:inherit;color:var(--texte);background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:7px 10px;outline:none}
+input[type=text]:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:34px;height:34px}
+input.titre{font-size:16px;font-weight:600}
+.meta{font-size:12px;color:var(--doux);margin:-4px 0 10px}
+.meta b{color:var(--ok);font-weight:500}
+.segment{display:inline-flex;border:1px solid var(--bord);border-radius:8px;overflow:hidden}
+.segment button{border:none;border-radius:0;padding:6px 14px}
+.segment button.actif{background:var(--accent);color:#fff}
+.tags{flex:1;min-width:220px;position:relative;display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:5px 6px}
+.tags:focus-within{border-color:var(--accent)}
+.tags input{border:none!important;background:none!important;padding:3px 4px!important;flex:1;min-width:120px}
+.puce{display:inline-flex;align-items:center;gap:5px;padding:2px 4px 2px 9px;border-radius:20px;font-size:13px;
+  background:var(--accent-doux);color:var(--accent)}
+.puce.nouveau{background:var(--nouveau-doux);color:var(--nouveau)}
+.puce small{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.puce .x{cursor:pointer;width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;opacity:.7}
+.puce .x:hover{opacity:1;background:rgba(0,0,0,.08)}
+.puce .suggere{cursor:pointer;text-decoration:underline;font-size:12px}
+.menu{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--carte);border:1px solid var(--bord);border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.14);z-index:10;max-height:240px;overflow:auto;padding:4px}
+.menu div{padding:6px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;gap:10px}
+.menu div.sel,.menu div:hover{background:var(--accent-doux)}
+.menu span.n{color:var(--doux);font-size:12px}
+.menu .creer{color:var(--nouveau)}
+.rapides{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rapides button{font-size:12px;padding:3px 10px;border-radius:20px}
+.avert{font-size:12px;background:var(--nouveau-doux);color:var(--nouveau);border-radius:8px;padding:7px 10px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.avert select{font:inherit;font-size:12px}
+select.cible{font:inherit;flex:1;min-width:220px;max-width:520px;padding:6px 8px;border:1px solid var(--bord);border-radius:8px;background:var(--bg);color:var(--texte)}
+.progres{height:6px;background:var(--bg);border-radius:4px;overflow:hidden;margin-top:6px}
+.progres div{height:100%;background:var(--accent);width:0;transition:width .3s}
+.statut{font-size:12px;color:var(--doux);margin-top:6px}
+.statut.ok{color:var(--ok)} .statut.err{color:var(--erreur)}
+.journal{font-size:12px;color:var(--erreur);margin-top:4px;max-height:80px;overflow:auto;-webkit-user-select:text;user-select:text}
+.cle{max-width:520px;margin:40px auto}
+.cle p{color:var(--doux)}
+.cle input{width:100%;margin-bottom:10px}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--texte);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.2s;pointer-events:none}
+.toast.vu{opacity:.95}
+.case{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--doux)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><i></i><i></i></div>
+  <h1>Publier sur Flickr</h1>
+  <div class="compte"><span class="pastille" id="pastille"></span><span id="compte">Non connecté</span>
+    <button id="btnConnexion" style="display:none">Se connecter</button></div>
+</header>
+<main id="main"></main>
+<footer id="pied" style="display:none">
+  <div class="resume" id="resume"></div>
+  <button id="btnArret" style="display:none">Arrêter</button>
+  <button class="primaire" id="btnPublier">Publier</button>
+</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+window.addEventListener("error", e=>{ try{ pywebview.api.journal(`${e.message} (ligne ${e.lineno})`) }catch(_){}
+  const t=document.getElementById("toast"); if(t){t.textContent="Erreur : "+e.message;t.classList.add("vu")} });
+const S = {etat:null, moi:null, tags:[], index:new Map(), albumsFlickr:[], analyse:null,
+           albums:[], commun:[], enCours:false};
+const $ = s => document.querySelector(s);
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const cle = t => String(t ?? "").toLowerCase().split("").filter(c => /[\p{L}\p{N}]/u.test(c)).join("");
+const sansAcc = t => String(t ?? "").normalize("NFD").replace(/\p{M}/gu, "");
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("vu");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("vu"),3500)}
+function lev(a,b){if(Math.abs(a.length-b.length)>2)return 9;const d=[...Array(b.length+1).keys()];
+  for(let i=1;i<=a.length;i++){let p=d[0];d[0]=i;for(let j=1;j<=b.length;j++){const t=d[j];
+  d[j]=Math.min(d[j]+1,d[j-1]+1,p+(a[i-1]==b[j-1]?0:1));p=t}}return d[b.length]}
+
+/* ---------- tags ---------- */
+function infoTag(t){
+  const k = cle(t);
+  if (S.index.has(k)) return {existe:true};
+  const ka = sansAcc(k);
+  let best=null, bd=9;
+  for (const x of S.tags){ const kx=sansAcc(x.cle); let d = kx===ka?0:(ka.length>4?lev(ka,kx):9);
+    if(d<bd){bd=d;best=x} }
+  return {existe:false, proche: bd<=1 ? best.tag : null};
+}
+function suggestions(q, deja){
+  const k = sansAcc(cle(q)); if(!k) return S.tags.filter(t=>!deja.has(t.cle)).slice(0,8);
+  return S.tags.filter(t=>!deja.has(t.cle) && sansAcc(t.cle).includes(k))
+    .sort((a,b)=>(sansAcc(b.cle).startsWith(k)-sansAcc(a.cle).startsWith(k))||b.nb-a.nb).slice(0,8);
+}
+/* Champ de tags réutilisable : liste = tableau modifié sur place */
+function champTags(conteneur, liste, surChange){
+  let sel = 0, ouvert=false;
+  function rendre(){
+    conteneur.innerHTML = liste.map((t,i)=>{
+      const inf = S.tags.length ? infoTag(t) : {existe:true};
+      return `<span class="puce ${inf.existe?"":"nouveau"}" title="${inf.existe?"Tag déjà utilisé sur le compte":"Nouveau tag"}">
+        ${esc(t)} ${inf.existe?"":"<small>nouveau</small>"}
+        ${inf.proche?`<span class="suggere" data-i="${i}" data-p="${esc(inf.proche)}">→ ${esc(inf.proche)} ?</span>`:""}
+        <span class="x" data-i="${i}">✕</span></span>`}).join("") +
+      `<input type="text" placeholder="${liste.length?"":"Ajouter des tags…"}">`;
+    const inp = conteneur.querySelector("input");
+    inp.addEventListener("input", ()=>{sel=0;menu(inp)});
+    inp.addEventListener("focus", ()=>menu(inp));
+    inp.addEventListener("blur", ()=>setTimeout(fermer,150));
+    inp.addEventListener("keydown", e=>{
+      const m = conteneur.querySelector(".menu"), items = m?[...m.children]:[];
+      if(e.key==="ArrowDown"&&items.length){sel=(sel+1)%items.length;menu(inp);e.preventDefault()}
+      else if(e.key==="ArrowUp"&&items.length){sel=(sel-1+items.length)%items.length;menu(inp);e.preventDefault()}
+      else if(e.key==="Enter"||e.key===","||e.key==="Tab"&&inp.value.trim()){
+        e.preventDefault(); const it=items[sel];
+        ajouter(it&&it.dataset.t!==undefined?it.dataset.t:inp.value);}
+      else if(e.key==="Backspace"&&!inp.value&&liste.length){liste.pop();changer(true)}
+      else if(e.key==="Escape"){fermer()}
+    });
+    conteneur.querySelectorAll(".x").forEach(x=>x.onclick=()=>{liste.splice(+x.dataset.i,1);changer(true)});
+    conteneur.querySelectorAll(".suggere").forEach(x=>x.onclick=()=>{liste[+x.dataset.i]=x.dataset.p;changer(true)});
+    conteneur.onclick = e=>{ if(e.target===conteneur) inp.focus() };
+  }
+  function fermer(){const m=conteneur.querySelector(".menu");if(m)m.remove();ouvert=false}
+  function menu(inp){
+    fermer(); const q=inp.value.replace(/,/g,"").trim();
+    const deja=new Set(liste.map(cle)); const s=suggestions(q,deja);
+    const items = s.map(t=>`<div data-t="${esc(t.tag)}"><span>${esc(t.tag)}</span><span class="n">${t.nb?t.nb+" photos":""}</span></div>`);
+    if(q && !S.index.has(cle(q)) && !deja.has(cle(q))) items.push(`<div data-t="${esc(q)}" class="creer"><span>Créer « ${esc(q)} »</span><span class="n">nouveau</span></div>`);
+    if(!items.length) return;
+    const m=document.createElement("div"); m.className="menu"; m.innerHTML=items.join("");
+    [...m.children].forEach((d,i)=>{ if(i===sel%items.length) d.classList.add("sel");
+      d.onmousedown=e=>{e.preventDefault();ajouter(d.dataset.t)} });
+    conteneur.appendChild(m); ouvert=true;
+  }
+  function ajouter(v){
+    v=v.replace(/,/g,"").trim(); if(!v) return;
+    const ex=S.tags.find(t=>t.cle===cle(v)); if(ex) v=ex.tag;   // garder l'écriture existante
+    if(!liste.some(t=>cle(t)===cle(v))) liste.push(v);
+    sel=0; changer(true);
+  }
+  function changer(focus){rendre(); surChange&&surChange(); if(focus) conteneur.querySelector("input").focus()}
+  conteneur.classList.add("tags"); conteneur._rendre=rendre; rendre();
+}
+
+/* ---------- écrans ---------- */
+function ecranCles(){
+  $("#pied").style.display="none";
+  $("#main").innerHTML = `<div class="bloc cle"><h3>Configuration</h3>
+    <p>Collez la clé et le secret de l'application Flickr du groupe.<br>
+    Pour en créer une : <button class="lien" id="lienApp">flickr.com/services/apps/create</button></p>
+    <input type="text" id="k" placeholder="Key"><input type="text" id="s" placeholder="Secret">
+    <button class="primaire" id="ok">Enregistrer</button></div>`;
+  $("#lienApp").onclick=()=>pywebview.api.ouvrir("https://www.flickr.com/services/apps/create/apply");
+  $("#ok").onclick=async()=>{ const k=$("#k").value.trim(), s=$("#s").value.trim();
+    if(!k||!s) return toast("Les deux champs sont nécessaires");
+    S.etat = await pywebview.api.enregistrer_cles(k,s); connexion(); ecranDepot(); };
+}
+function ecranDepot(){
+  $("#pied").style.display="none"; S.analyse=null;
+  $("#main").innerHTML = `<div class="depot" id="zone">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3-3 3 3"/></svg>
+    <div class="grand">Déposez un dossier de photos ici</div>
+    <div>Un album est créé pour le dossier et pour chacun de ses sous-dossiers contenant des photos.</div>
+    <button id="choisir">Choisir un dossier…</button></div>`;
+  $("#choisir").onclick=async()=>{const r=await pywebview.api.choisir_dossier(); if(r) surAnalyse(r)};
+}
+function surAnalyse(r){
+  if(S.enCours) return toast("Publication en cours : attendez la fin");
+  if(!r.albums.length){ toast("Aucune photo trouvée dans « "+r.nom+" »"); return; }
+  S.analyse=r;
+  S.commun = [...S.etat.tags_defaut];
+  const communs=new Set(S.commun.map(cle));
+  S.albums = r.albums.map(a=>({...a, inclus:true, tags:a.tags.filter(t=>!communs.has(cle(t))),
+      public: a.public===null||a.public===undefined ? S.etat.public_defaut : a.public, cible:null}));
+  rendreAlbums();
+}
+function rendreAlbums(){
+  const r=S.analyse;
+  $("#main").innerHTML = `
+    <div class="barre"><h2>📁 ${esc(r.nom)}</h2>
+      <button id="changer">Changer de dossier</button></div>
+    <div class="bloc"><h3>Tags pour tous les albums</h3><div id="commun"></div>
+      <div class="rapides" id="rapides"></div></div>
+    <div class="bloc" style="display:flex;gap:14px;align-items:center">
+      <span style="flex:1;color:var(--doux)">${S.albums.length} album${S.albums.length>1?"s":""} détecté${S.albums.length>1?"s":""}</span>
+      <span class="case">Visibilité de tous :</span>
+      <div class="segment"><button data-tous="0">Privé</button><button data-tous="1">Public</button></div>
+    </div>
+    <div id="liste"></div>`;
+  $("#changer").onclick=()=>{ if(!S.enCours) ecranDepot() };
+  champTags($("#commun"), S.commun, rapides);
+  rapides();
+  document.querySelectorAll("[data-tous]").forEach(b=>b.onclick=()=>{
+    S.albums.forEach(a=>a.public=b.dataset.tous==="1"); rendreListe(); });
+  rendreListe();
+  $("#pied").style.display="flex"; resume();
+}
+function rapides(){
+  const deja=new Set(S.commun.map(cle));
+  const top=S.tags.filter(t=>!deja.has(t.cle)).slice(0,14);
+  $("#rapides").innerHTML = top.length ? `<span class="case">Les plus utilisés :</span>` +
+    top.map(t=>`<button data-t="${esc(t.tag)}">+ ${esc(t.tag)}</button>`).join("") : "";
+  $("#rapides").querySelectorAll("button").forEach(b=>b.onclick=()=>{S.commun.push(b.dataset.t);$("#commun")._rendre();rapides()});
+}
+/* destination : choix de l'utilisateur, sinon l'album du dossier s'il existe encore, sinon nouveau */
+function cibleDe(a){
+  if(a.cible) return a.cible;
+  // liste pas encore chargée : on garde l'album du dossier (vérifié côté Python avant envoi)
+  if(a.album_id && (!S.albumsFlickr.length || S.albumsFlickr.some(x=>x.id===a.album_id))) return a.album_id;
+  return "nouveau";
+}
+function rendreListe(){
+  const L=$("#liste"); L.innerHTML="";
+  S.albums.forEach((a,i)=>{
+    const d=document.createElement("div"); d.className="bloc album"+(a.inclus?"":" exclu"); d.id="alb"+i;
+    const cible = cibleDe(a);
+    const charges = S.albumsFlickr.length>0;
+    const supprime = charges && a.album_id && !S.albumsFlickr.some(x=>x.id===a.album_id);
+    const homonyme = cible==="nouveau" && S.albumsFlickr.find(x=>x.titre.trim().toLowerCase()===a.titre.trim().toLowerCase());
+    d.innerHTML = `
+      <div class="vignettes">${[0,1,2,3].map(j=>`<div data-v="${j}"></div>`).join("")}</div>
+      <div>
+        <div class="ligne"><input type="text" class="titre" value="${esc(a.titre)}">
+          <label class="case" style="width:auto"><input type="checkbox" class="inclus" ${a.inclus?"checked":""}> Publier</label></div>
+        <div class="meta">${a.relatif==="."?"Dossier principal":esc(a.relatif)} · ${a.nb} fichier${a.nb>1?"s":""}
+          ${a.deja?` · <b>${a.deja} déjà en ligne</b>`:""}</div>
+        <div class="ligne"><label>Album Flickr</label>
+          <select class="cible">
+            <option value="nouveau" ${cible==="nouveau"?"selected":""}>➕ Créer un nouvel album</option>
+            ${charges?`<optgroup label="Ajouter à un album existant">${S.albumsFlickr.map(x=>
+              `<option value="${esc(x.id)}" ${cible===x.id?"selected":""}>${esc(x.titre)}${x.id===a.album_id?" (album de ce dossier)":""}</option>`).join("")}</optgroup>`
+              :`<option disabled>Chargement des albums…</option>`}
+          </select></div>
+        ${supprime?`<div class="avert">L'album créé précédemment pour ce dossier n'existe plus sur Flickr : un nouvel album sera créé, avec les photos déjà envoyées.</div>`:""}
+        ${homonyme?`<div class="avert">Un album « ${esc(homonyme.titre)} » existe déjà sur Flickr.
+          <button class="lien" data-h="${esc(homonyme.id)}">Y ajouter les photos</button></div>`:""}
+        <div class="ligne"><label>Tags en plus</label><div class="t"></div></div>
+        <div class="ligne"><label>Description</label><textarea class="desc">${esc(a.description)}</textarea></div>
+        <div class="ligne"><label>Commune</label><input type="text" class="commune" value="${esc(a.commune)}" placeholder="Pour la carte (si pas de GPS)" style="max-width:260px">
+          <span style="flex:1"></span>
+          <div class="segment"><button class="vis ${!a.public?"actif":""}" data-p="0">Privé</button><button class="vis ${a.public?"actif":""}" data-p="1">Public</button></div></div>
+        <div class="suivi"></div>
+      </div>`;
+    L.appendChild(d);
+    d.querySelector(".titre").oninput=e=>{a.titre=e.target.value};
+    d.querySelector(".titre").onchange=()=>rendreListe();
+    d.querySelector(".inclus").onchange=e=>{a.inclus=e.target.checked;d.classList.toggle("exclu",!a.inclus);resume()};
+    d.querySelector(".desc").oninput=e=>a.description=e.target.value;
+    d.querySelector(".commune").oninput=e=>a.commune=e.target.value;
+    const choisir = v=>{ a.cible=v; const x=S.albumsFlickr.find(y=>y.id===v); if(x) a.titre=x.titre; rendreListe(); };
+    d.querySelector(".cible").onchange=e=>choisir(e.target.value);
+    const h=d.querySelector("[data-h]"); if(h) h.onclick=()=>choisir(h.dataset.h);
+    d.querySelectorAll(".vis").forEach(b=>b.onclick=()=>{a.public=b.dataset.p==="1";
+      d.querySelectorAll(".vis").forEach(x=>x.classList.toggle("actif",x===b))});
+    champTags(d.querySelector(".t"), a.tags);
+    a.apercu.forEach(async(p,j)=>{const u=await pywebview.api.apercu(p);
+      if(u){const v=d.querySelector(`[data-v="${j}"]`); if(v) v.style.backgroundImage=`url(${u})`}});
+  });
+}
+function resume(){
+  const inc=S.albums.filter(a=>a.inclus);
+  const n=inc.reduce((s,a)=>s+a.nb-a.deja,0);
+  $("#resume").textContent = `${inc.length} album${inc.length>1?"s":""} · ${n} photo${n>1?"s":""} à envoyer`;
+  $("#btnPublier").disabled = !inc.length || !S.moi || S.enCours;
+  $("#btnPublier").textContent = S.moi ? "Publier" : "Connectez-vous d'abord";
+}
+
+/* ---------- publication ---------- */
+let file=[];
+$("#btnPublier").onclick=()=>{
+  file = S.albums.map((a,i)=>({a,i})).filter(x=>x.a.inclus);
+  if(!file.length) return;
+  const albums = file.map(({a})=>({chemin:a.chemin, titre:a.titre, description:a.description,
+      commune:a.commune, public:a.public, cible:cibleDe(a),
+      tags:[...S.commun, ...a.tags.filter(t=>!S.commun.some(c=>cle(c)===cle(t)))]}));
+  S.enCours=true; resume(); $("#btnArret").style.display="";
+  document.querySelectorAll("#liste input,#liste textarea,#liste button,#liste select").forEach(e=>e.disabled=true);
+  file.forEach(({i})=>$("#alb"+i+" .suivi").innerHTML=`<div class="progres"><div></div></div><div class="statut">En attente…</div><div class="journal"></div>`);
+  pywebview.api.publier(albums);
+};
+$("#btnArret").onclick=()=>{pywebview.api.arreter(); $("#btnArret").textContent="Arrêt en cours…"};
+function surProgres(ev){
+  const {i}=file[ev.album]; const z=$("#alb"+i); if(!z) return;
+  const st=z.querySelector(".statut"), bar=z.querySelector(".progres div"), j=z.querySelector(".journal");
+  z.scrollIntoView({block:"nearest",behavior:"smooth"});
+  if(ev.type==="debut") st.textContent="Préparation…";
+  if(ev.type==="photo"){ bar.style.width=(100*(ev.i-1)/ev.n)+"%"; st.textContent=`Envoi ${ev.i}/${ev.n} — ${ev.fichier}` }
+  if(ev.type==="info") st.textContent=ev.msg;
+  if(ev.type==="erreur") j.innerHTML+=esc(ev.msg)+"<br>";
+  if(ev.type==="fin"){ bar.style.width="100%";
+    st.className="statut "+(ev.echecs.length?"err":"ok");
+    st.innerHTML = (ev.erreur?`Erreur : ${esc(ev.erreur)}`:
+      `✓ ${ev.envoyees} photo${ev.envoyees>1?"s":""} envoyée${ev.envoyees>1?"s":""}`+
+      (ev.echecs.length?` · ${ev.echecs.length} échec(s) — relancez pour réessayer`:"")) +
+      (ev.url?` · <button class="lien" data-u="${esc(ev.url)}">Voir l'album</button>`:"");
+    const b=st.querySelector("[data-u]"); if(b) b.onclick=()=>pywebview.api.ouvrir(b.dataset.u);
+  }
+}
+async function surTermine(bilan){
+  S.enCours=false; $("#btnArret").style.display="none"; $("#btnArret").textContent="Arrêter";
+  const n=bilan.reduce((s,b)=>s+b.envoyees,0), e=bilan.reduce((s,b)=>s+b.echecs.length,0);
+  toast(`Terminé : ${n} photo${n>1?"s":""} envoyée${n>1?"s":""}`+(e?`, ${e} échec(s)`:""));
+  // ré-analyse pour refléter l'état en ligne, en gardant les saisies
+  const saisies = S.albums; const r = await pywebview.api.analyser(S.analyse.racine);
+  S.analyse=r;
+  S.albums = r.albums.map(a=>{const p=saisies.find(x=>x.chemin===a.chemin)||{};
+    return {...a, inclus:p.inclus??true, tags:p.tags??[...a.tags], titre:p.titre??a.titre,
+      description:p.description??a.description, commune:p.commune??a.commune,
+      public:p.public??S.etat.public_defaut, cible:null}});
+  const anciens=[...document.querySelectorAll(".suivi")].map(x=>x.innerHTML);
+  rendreListe(); document.querySelectorAll(".suivi").forEach((x,k)=>x.innerHTML=anciens[k]||"");
+  resume();
+}
+
+/* ---------- connexion / données du compte ---------- */
+function connexion(){
+  $("#compte").textContent="Connexion…"; $("#btnConnexion").style.display="none";
+  pywebview.api.connecter();
+}
+function surConnexion(r){
+  if(r.ok){ S.moi=r.moi; $("#pastille").classList.add("on"); $("#compte").textContent=r.moi.nom; }
+  else { $("#compte").textContent="Non connecté"; $("#btnConnexion").style.display="";
+         toast("Connexion impossible : "+r.erreur); }
+  if(S.analyse) resume();
+}
+function surTags(t){
+  t=t.map(x=>({...x, tag:String(x.tag), cle:String(x.cle)}));
+  S.tags=t; S.index=new Map(t.map(x=>[x.cle,x]));
+  document.querySelectorAll(".tags").forEach(c=>c._rendre&&c._rendre());
+  if($("#rapides")) rapides();
+}
+function surAlbumsExistants(a){ S.albumsFlickr=a.map(x=>({id:String(x.id), titre:String(x.titre)})); if(S.analyse && !S.enCours) rendreListe(); }
+function surErreur(m){ toast(m) }
+$("#btnConnexion").onclick=connexion;
+
+/* survol visuel de la zone de dépôt (le dépôt lui-même est géré côté Python) */
+document.addEventListener("dragenter",()=>{const z=$("#zone");if(z)z.classList.add("survol")});
+document.addEventListener("dragleave",e=>{if(!e.relatedTarget){const z=$("#zone");if(z)z.classList.remove("survol")}});
+document.addEventListener("drop",()=>{const z=$("#zone");if(z)z.classList.remove("survol")});
+
+window.addEventListener("pywebviewready", async()=>{
+  S.etat = await pywebview.api.etat();
+  if(S.etat.version) document.title = "Publier sur Flickr " + S.etat.version,
+    $("h1").insertAdjacentHTML("beforeend", ` <span style="font-weight:400;color:var(--doux);font-size:12px">v${esc(S.etat.version)}</span>`);
+  if(!S.etat.cles) return ecranCles();
+  ecranDepot(); connexion();
+});
+</script>
+</body>
+</html>

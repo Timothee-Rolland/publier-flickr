@@ -1,0 +1,3 @@
+#!/bin/bash
+# Bloque un commit qui contiendrait la clé Flickr.
+exec "$(git rev-parse --show-toplevel)/scripts/verifier_secrets.sh"

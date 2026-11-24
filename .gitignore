@@ -1,0 +1,13 @@
+# Secrets : la clé Flickr ne doit jamais être publiée
+config.ini
+**/config.ini
+*.secret
+# Fichiers locaux
+.venv/
+__pycache__/
+*.pyc
+dist/
+.DS_Store
+.flickr_suivi.json
+.journal.txt
+journal.txt

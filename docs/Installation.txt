@@ -1,0 +1,27 @@
+PUBLIER SUR FLICKR — installation
+
+1. Glisser « Publier sur Flickr » dans le dossier Applications
+   (éviter le Bureau : macOS y bloque l'accès aux fichiers).
+
+2. Premier lancement : double-cliquer sur l'app.
+   macOS indique qu'elle provient d'un développeur non identifié :
+   - macOS 15 et plus : Réglages Système → Confidentialité et sécurité → en bas, « Ouvrir quand même ».
+   - macOS 14 et avant : clic droit sur l'app → Ouvrir → Ouvrir.
+
+3. Si macOS demande d'installer les « outils de développement en ligne de commande »,
+   accepter (c'est ce qui fournit Python), puis relancer l'app.
+
+4. L'app installe ses composants (1 à 3 minutes, connexion internet nécessaire),
+   puis ouvre Flickr dans le navigateur : se connecter avec le compte Flickr du groupe
+   et cliquer sur « OK, I'll authorize it ». Ces étapes ne se font qu'une fois.
+
+Utilisation : glisser un dossier de photos dans la fenêtre. Un album par sous-dossier.
+Les photos sont envoyées en privé par défaut.
+
+Mises à jour : automatiques, au lancement (notification « Mise à jour installée »).
+
+Si les photos sont sur le Bureau et que l'app ne les voit pas :
+mettre le dossier ailleurs (Images, Documents…).
+
+En cas de problème : envoyer le fichier
+~/Library/Application Support/Publier sur Flickr/journal.txt

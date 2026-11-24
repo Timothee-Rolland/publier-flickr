@@ -1,0 +1,84 @@
+#!/bin/bash
+# Lanceur de « Publier sur Flickr ».
+# - macOS interdit à l'app de lire le Bureau : le programme tourne depuis
+#   ~/Library/Application Support/Publier sur Flickr (copié depuis Contents/Resources).
+# - À chaque lancement, vérifie sur GitHub si une version plus récente est publiée.
+DEPOT="Timothee-Rolland/publier-flickr"
+RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
+DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+SUP="$HOME/Library/Application Support/Publier sur Flickr"
+export PATH="/Library/Frameworks/Python.framework/Versions/Current/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+mkdir -p "$SUP"
+JOURNAL="$DIR/.journal.txt"
+{ : >>"$JOURNAL"; } 2>/dev/null || JOURNAL="$SUP/journal.txt"
+echo "=== $(date) — lancement" >>"$JOURNAL"
+
+notifier() { osascript -e "display notification \"$1\" with title \"Publier sur Flickr\"" >/dev/null 2>&1; }
+alerte()   { osascript -e "display alert \"Publier sur Flickr\" message \"$1\"" >/dev/null 2>&1; }
+# plus_recente A B : vrai si la version A est strictement plus récente que B
+plus_recente() {
+  local IFS=. i a b
+  a=($1); b=($2)
+  for ((i=0; i<${#a[@]} || i<${#b[@]}; i++)); do
+    ((10#${a[i]:-0} > 10#${b[i]:-0})) && return 0
+    ((10#${a[i]:-0} < 10#${b[i]:-0})) && return 1
+  done
+  return 1
+}
+
+# 1. Programme embarqué dans l'app -> Application Support (si absent ou plus récent)
+V_APP="$(cat "$RES/VERSION" 2>/dev/null || echo 0)"
+V_SUP="$(cat "$SUP/VERSION" 2>/dev/null || echo 0)"
+if [ ! -f "$SUP/app.py" ] || plus_recente "$V_APP" "$V_SUP"; then
+  while read -r f; do [ -n "$f" ] && cp -f "$RES/$f" "$SUP/$f" 2>>"$JOURNAL"; done < "$RES/fichiers.txt"
+  cp -f "$RES/fichiers.txt" "$SUP/" 2>>"$JOURNAL"
+  echo "$V_APP" > "$SUP/VERSION"; V_SUP="$V_APP"
+fi
+[ -f "$SUP/config.ini" ] || cp "$RES/config.ini" "$SUP/config.ini" 2>>"$JOURNAL"
+
+# 2. Composants Python (une seule fois, ou si la liste change)
+PY="$SUP/.venv/bin/python3"
+if ! "$PY" -c "import webview, flickrapi, PIL" >>"$JOURNAL" 2>&1; then
+  notifier "Installation des composants (1 à 3 minutes, une seule fois)…"
+  [ -x "$PY" ] || python3 -m venv "$SUP/.venv" >>"$JOURNAL" 2>&1
+  if ! "$PY" -m pip install --upgrade pip -r "$SUP/requirements.txt" >>"$JOURNAL" 2>&1; then
+    alerte "Installation impossible. Détails : ~/Library/Application Support/Publier sur Flickr/journal.txt"
+    exit 1
+  fi
+fi
+
+# 3. Mise à jour depuis GitHub (dernière « release » publiée). Hors ligne : on passe.
+DERNIERE="$(curl -fsSL --max-time 5 "https://api.github.com/repos/$DEPOT/releases/latest" 2>/dev/null \
+  | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([0-9][0-9.]*\)".*/\1/p' | head -1)"
+if [ -n "$DERNIERE" ] && plus_recente "$DERNIERE" "$V_SUP"; then
+  echo "Mise à jour $V_SUP -> $DERNIERE" >>"$JOURNAL"
+  TMP="$(mktemp -d)"; BASE="https://raw.githubusercontent.com/$DEPOT/v$DERNIERE/app"; ok=1
+  curl -fsSL --max-time 20 "$BASE/fichiers.txt" -o "$TMP/fichiers.txt" 2>>"$JOURNAL" || ok=0
+  if [ $ok = 1 ]; then
+    while read -r f; do
+      [ -z "$f" ] && continue
+      case "$f" in */*|.*|*..*) ok=0; break;; esac          # noms de fichiers simples uniquement
+      curl -fsSL --max-time 60 "$BASE/$f" -o "$TMP/$f" 2>>"$JOURNAL" && [ -s "$TMP/$f" ] || { ok=0; break; }
+    done < "$TMP/fichiers.txt"
+  fi
+  if [ $ok = 1 ]; then                                          # le code téléchargé doit être valide
+    for f in "$TMP"/*.py; do "$PY" -m py_compile "$f" 2>>"$JOURNAL" || ok=0; done
+  fi
+  if [ $ok = 1 ] && ! cmp -s "$TMP/requirements.txt" "$SUP/requirements.txt"; then
+    "$PY" -m pip install -r "$TMP/requirements.txt" >>"$JOURNAL" 2>&1 || ok=0
+  fi
+  if [ $ok = 1 ]; then
+    while read -r f; do [ -n "$f" ] && cp -f "$TMP/$f" "$SUP/$f"; done < "$TMP/fichiers.txt"
+    cp -f "$TMP/fichiers.txt" "$SUP/"; echo "$DERNIERE" > "$SUP/VERSION"
+    notifier "Mise à jour installée : version $DERNIERE"
+  else
+    echo "Mise à jour $DERNIERE abandonnée (téléchargement ou vérification en échec)" >>"$JOURNAL"
+  fi
+  rm -rf "$TMP"
+fi
+
+if [ ! -f "$SUP/app.py" ]; then
+  alerte "Programme introuvable. Détails : ~/Library/Application Support/Publier sur Flickr/journal.txt"
+  exit 1
+fi
+cd "$SUP" && exec "$PY" "$SUP/app.py" >>"$JOURNAL" 2>&1

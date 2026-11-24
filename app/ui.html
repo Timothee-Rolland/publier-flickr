@@ -44,29 +44,49 @@ button.lien{border:none;background:none;color:var(--accent);padding:0}
 .bloc h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--doux);font-weight:600}
 .album{display:grid;grid-template-columns:120px 1fr;gap:18px}
 .album.exclu{opacity:.45}
-.vignettes{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start;position:relative;cursor:pointer;border-radius:8px}
-.vignettes div{aspect-ratio:1;border-radius:6px;background:var(--bg) center/cover no-repeat}
-.vignettes .voir{position:absolute;inset:0;aspect-ratio:auto;display:flex;align-items:center;justify-content:center;
-  background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:600;text-align:center;opacity:0;transition:.15s;padding:6px}
+.vignettes{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start;position:relative;cursor:pointer;border-radius:8px;width:120px}
+.vignettes div[data-v]{width:58px;height:58px;border-radius:6px;background:var(--bg) center/cover no-repeat}
+.vignettes .voir{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;border-radius:8px;
+  background:rgba(0,0,0,.5);color:#fff;font-size:12px;font-weight:600;text-align:center;opacity:0;transition:opacity .15s;padding:6px}
 .vignettes:hover .voir{opacity:1}
-.galerie{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column}
+.galerie{position:fixed;top:0;left:0;right:0;bottom:0;z-index:50;background:var(--bg);display:flex;flex-direction:column}
 .g-tete{display:flex;align-items:center;gap:10px;padding:14px 22px;border-bottom:1px solid var(--bord);background:var(--carte)}
 .g-titre{flex:1;display:flex;flex-direction:column}
 .g-titre span{font-size:12px;color:var(--doux)}
-.g-grille{flex:1;overflow:auto;padding:18px 22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start}
-.tuile{position:relative;border-radius:10px;overflow:hidden;background:var(--carte);border:2px solid var(--accent);cursor:pointer;transition:.12s}
-.tuile .img{aspect-ratio:1;background:var(--bord) center/cover no-repeat}
-.tuile .nom{font-size:11px;color:var(--doux);padding:4px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tuile .coche{position:absolute;top:7px;right:7px;width:22px;height:22px;border-radius:50%;background:var(--accent);
-  color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.g-info{margin:14px 22px 0;padding:9px 12px;border-radius:8px;background:var(--ok-doux);color:var(--ok);font-size:13px}
+.g-grille{flex:1;overflow:auto;padding:16px 22px;display:flex;flex-wrap:wrap;gap:10px;align-content:flex-start}
+.tuile{position:relative;height:160px;min-width:90px;flex:0 0 auto;border-radius:8px;overflow:hidden;background:var(--bord);
+  box-shadow:0 0 0 3px var(--accent);cursor:zoom-in;transition:opacity .12s, box-shadow .12s}
+.tuile img{height:160px;width:auto;display:block}
+.tuile .vide{width:140px;height:160px}
+.tuile .nom{position:absolute;left:0;right:0;bottom:0;font-size:11px;color:#fff;padding:14px 8px 5px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;background:linear-gradient(transparent,rgba(0,0,0,.65));opacity:0;transition:opacity .12s}
+.tuile:hover .nom{opacity:1}
+.tuile .coche{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;background:var(--accent);border:2px solid #fff;
+  color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.35)}
 .tuile .coche::after{content:"✓"}
-.tuile.non{border-color:transparent;opacity:.45}
-.tuile.non .coche{background:rgba(255,255,255,.85)}
+.tuile .coche:hover{transform:scale(1.1)}
+.tuile.non{box-shadow:none;opacity:.5}
+.tuile.non:hover{opacity:.8}
+.tuile.non .coche{background:rgba(0,0,0,.25)}
 .tuile.non .coche::after{content:""}
-.tuile.deja{border-color:transparent;cursor:default}
-.tuile .badge{position:absolute;left:7px;top:7px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:rgba(0,0,0,.6);color:#fff}
+.tuile.deja{box-shadow:none}
+.tuile .badge{position:absolute;left:6px;top:6px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:rgba(0,0,0,.6);color:#fff}
 .tuile .badge.ok{background:var(--ok)}
+.tuile .badge + .badge{top:28px}
 .g-aide{font-size:12px;color:var(--doux);padding:0 22px 12px}
+.loupe{position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:rgba(12,12,14,.97);display:flex;flex-direction:column;color:#fff}
+.loupe .l-tete{display:flex;align-items:center;gap:12px;padding:12px 18px}
+.loupe .l-tete span{flex:1;font-size:13px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.loupe button{background:rgba(255,255,255,.12);border-color:transparent;color:#fff}
+.loupe button:hover{background:rgba(255,255,255,.22)}
+.loupe .l-image{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:0 70px;position:relative}
+.loupe .l-image img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px}
+.loupe .nav{position:absolute;top:50%;margin-top:-26px;width:52px;height:52px;border-radius:50%;font-size:24px;padding:0}
+.loupe .prec{left:10px} .loupe .suiv{right:10px}
+.loupe .l-pied{display:flex;justify-content:center;gap:12px;padding:14px}
+.loupe .l-pied label{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;background:rgba(255,255,255,.12);padding:8px 14px;border-radius:8px}
+.loupe .chargement{opacity:.6;font-size:13px}
 .ligne{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .ligne label{font-size:12px;color:var(--doux);width:88px;flex:none}
 .ligne > input,.ligne > textarea{flex:1;min-width:180px}
@@ -352,66 +372,106 @@ function rendreListe(){
 /* ---------- galerie : choisir les fichiers à envoyer ---------- */
 function aEnvoyer(a){ return a.fichiers.filter(f=>!f.deja && !a.exclus.has(f.nom)).length; }
 const fileApercus=[]; let apercusEnCours=0;
-function chargerApercu(chemin, el){
-  fileApercus.push([chemin,el]); pomperApercus();
-}
+function chargerApercu(chemin, taille, rappel){ fileApercus.push([chemin,taille,rappel]); pomperApercus(); }
 function pomperApercus(){
   while(apercusEnCours<6 && fileApercus.length){
-    const [chemin,el]=fileApercus.shift();
-    if(!el.isConnected) continue;
+    const [chemin,taille,rappel]=fileApercus.shift();
     apercusEnCours++;
-    pywebview.api.apercu(chemin,320).then(u=>{ if(u) el.style.backgroundImage=`url(${u})` })
+    pywebview.api.apercu(chemin,taille).then(u=>rappel(u)).catch(()=>rappel(null))
       .finally(()=>{ apercusEnCours--; pomperApercus(); });
   }
 }
 function ouvrirGalerie(i){
   if(S.enCours) return toast("Publication en cours : attendez la fin");
   const a=S.albums[i]; let dernier=null;
+  const dispo=a.fichiers.filter(f=>!f.deja).length;
   const g=document.createElement("div"); g.className="galerie";
   g.innerHTML=`<div class="g-tete">
       <div class="g-titre"><b>${esc(a.titre)}</b><span class="g-compte"></span></div>
-      <button data-act="tout">Tout sélectionner</button>
-      <button data-act="rien">Tout désélectionner</button>
+      ${dispo?`<button data-act="tout">Tout sélectionner</button><button data-act="rien">Tout désélectionner</button>`:""}
       <button class="primaire" data-act="ok">Terminé</button></div>
+    ${dispo?"":`<div class="g-info">✓ Tous les fichiers de cet album sont déjà sur Flickr : il n'y a rien de nouveau à envoyer.</div>`}
     <div class="g-grille">${a.fichiers.map((f,j)=>`
-      <div class="tuile ${f.deja?"deja":""}" data-j="${j}" title="${esc(f.nom)}">
-        <div class="img"></div>
-        ${f.deja?`<span class="badge ok">En ligne</span>`:`<span class="coche"></span>`}
-        ${f.video&&!f.deja?`<span class="badge">▶ Vidéo</span>`:""}
-        <div class="nom">${f.video&&f.deja?"▶ ":""}${esc(f.nom)}</div></div>`).join("")}</div>
-    <div class="g-aide">Cliquez sur un fichier pour l'inclure ou l'exclure · Maj+clic : sélectionner une plage · Échap : fermer</div>`;
+      <div class="tuile ${f.deja?"deja":""}" data-j="${j}">
+        <div class="vide"></div>
+        ${f.deja?`<span class="badge ok">✓ En ligne</span>`:`<span class="coche" title="Inclure / exclure de l'envoi"></span>`}
+        ${f.video?`<span class="badge">▶ Vidéo</span>`:""}
+        <div class="nom">${esc(f.nom)}</div></div>`).join("")}</div>
+    <div class="g-aide">${dispo?"Cliquez sur une image pour l'agrandir · la pastille ✓ inclut ou exclut le fichier · Maj+clic sur la pastille : toute une plage · ":"Cliquez sur une image pour l'agrandir · "}Échap : fermer</div>`;
   document.body.appendChild(g);
   const tuiles=[...g.querySelectorAll(".tuile")];
   function maj(){
     tuiles.forEach(t=>{const f=a.fichiers[+t.dataset.j]; if(!f.deja) t.classList.toggle("non",a.exclus.has(f.nom))});
-    const choix=aEnvoyer(a), dispo=a.fichiers.filter(f=>!f.deja).length;
-    g.querySelector(".g-compte").textContent=`${choix} sur ${dispo} à envoyer`+
-      (a.deja?` · ${a.deja} déjà en ligne`:"");
+    g.querySelector(".g-compte").textContent=`${aEnvoyer(a)} sur ${dispo} à envoyer`+(a.deja?` · ${a.deja} déjà en ligne`:"");
   }
-  function basculer(j, valeur){
+  function basculer(j, exclure){
     const f=a.fichiers[j]; if(f.deja) return;
-    const exclure = valeur===undefined ? !a.exclus.has(f.nom) : valeur;
+    if(exclure===undefined) exclure=!a.exclus.has(f.nom);
     exclure ? a.exclus.add(f.nom) : a.exclus.delete(f.nom);
   }
-  g.querySelector(".g-grille").onclick=e=>{
+  g.querySelector(".g-grille").addEventListener("click", e=>{
     const t=e.target.closest(".tuile"); if(!t) return;
     const j=+t.dataset.j;
-    if(e.shiftKey && dernier!==null){
-      const exclure=a.exclus.has(a.fichiers[dernier].nom);
-      for(let k=Math.min(dernier,j);k<=Math.max(dernier,j);k++) basculer(k,exclure);
-    } else basculer(j);
-    dernier=j; maj();
-  };
-  function fermer(){ g.remove(); document.removeEventListener("keydown",clavier); rendreListe(); resume(); }
-  function clavier(e){ if(e.key==="Escape") fermer(); }
+    if(e.target.closest(".coche")){
+      if(e.shiftKey && dernier!==null){
+        const exclure=!a.exclus.has(a.fichiers[j].nom);   // l'état visé par ce clic
+        for(let k=Math.min(dernier,j);k<=Math.max(dernier,j);k++) basculer(k,exclure);
+      } else basculer(j);
+      dernier=j; maj();
+    } else loupe(j);
+  });
+  /* --- affichage en grand --- */
+  let lp=null, courant=0;
+  function loupe(j){
+    courant=j; const f=a.fichiers[j];
+    if(!lp){ lp=document.createElement("div"); lp.className="loupe"; document.body.appendChild(lp); }
+    lp.innerHTML=`<div class="l-tete"><span>${esc(f.nom)} · ${j+1} / ${a.fichiers.length}</span>
+        ${f.video?`<button data-l="lire">▶ Lire la vidéo</button>`:""}
+        <button data-l="fermer">Fermer ✕</button></div>
+      <div class="l-image"><span class="chargement">Chargement…</span>
+        ${j>0?`<button class="nav prec" data-l="prec">‹</button>`:""}
+        ${j<a.fichiers.length-1?`<button class="nav suiv" data-l="suiv">›</button>`:""}</div>
+      <div class="l-pied">${f.deja?`<label>✓ Déjà en ligne sur Flickr</label>`:
+        `<label><input type="checkbox" ${a.exclus.has(f.nom)?"":"checked"}> Inclure dans l'envoi</label>`}</div>`;
+    const cb=lp.querySelector("input[type=checkbox]");
+    if(cb) cb.onchange=()=>{ basculer(j, !cb.checked); maj(); };
+    lp.querySelector('[data-l="fermer"]').onclick=fermerLoupe;
+    const pr=lp.querySelector('[data-l="prec"]'); if(pr) pr.onclick=()=>loupe(j-1);
+    const sv=lp.querySelector('[data-l="suiv"]'); if(sv) sv.onclick=()=>loupe(j+1);
+    const li=lp.querySelector('[data-l="lire"]'); if(li) li.onclick=()=>pywebview.api.ouvrir_fichier(f.chemin);
+    lp.querySelector(".l-image").addEventListener("click", e=>{ if(e.target.classList.contains("l-image")) fermerLoupe(); });
+    pywebview.api.apercu(f.chemin,1600).then(u=>{
+      if(!lp || courant!==j) return;
+      const zone=lp.querySelector(".l-image"), c=zone.querySelector(".chargement");
+      if(!u){ c.textContent="Aperçu indisponible"; return; }
+      const img=new Image(); img.src=u; c.replaceWith(img);
+    });
+  }
+  function fermerLoupe(){ if(lp){ lp.remove(); lp=null; } }
+  /* --- fermeture et clavier --- */
+  function fermer(){ fermerLoupe(); g.remove(); document.removeEventListener("keydown",clavier); rendreListe(); resume(); }
+  function clavier(e){
+    if(lp){
+      if(e.key==="Escape") fermerLoupe();
+      else if(e.key==="ArrowLeft" && courant>0) loupe(courant-1);
+      else if(e.key==="ArrowRight" && courant<a.fichiers.length-1) loupe(courant+1);
+      else if(e.key===" "){ e.preventDefault(); const cb=lp.querySelector("input[type=checkbox]"); if(cb){ cb.checked=!cb.checked; cb.onchange(); } }
+      return;
+    }
+    if(e.key==="Escape") fermer();
+  }
   document.addEventListener("keydown",clavier);
-  g.querySelector('[data-act="tout"]').onclick=()=>{a.exclus.clear();maj()};
-  g.querySelector('[data-act="rien"]').onclick=()=>{a.fichiers.forEach(f=>{if(!f.deja)a.exclus.add(f.nom)});maj()};
+  const bt=g.querySelector('[data-act="tout"]'); if(bt) bt.onclick=()=>{a.exclus.clear();maj()};
+  const br=g.querySelector('[data-act="rien"]'); if(br) br.onclick=()=>{a.fichiers.forEach(f=>{if(!f.deja)a.exclus.add(f.nom)});maj()};
   g.querySelector('[data-act="ok"]').onclick=fermer;
-  // miniatures chargées au fil du défilement
-  const obs=new IntersectionObserver(es=>es.forEach(en=>{ if(en.isIntersecting){
-      const t=en.target; obs.unobserve(t); chargerApercu(a.fichiers[+t.dataset.j].chemin, t.querySelector(".img")); }}),
-    {root:g.querySelector(".g-grille"), rootMargin:"300px"});
+  /* --- miniatures au format réel, chargées au fil du défilement --- */
+  const obs=new IntersectionObserver(es=>es.forEach(en=>{ if(!en.isIntersecting) return;
+      const t=en.target; obs.unobserve(t);
+      chargerApercu(a.fichiers[+t.dataset.j].chemin, 400, u=>{
+        if(!u || !t.isConnected) return;
+        const img=new Image(); img.alt=""; img.onload=()=>{ const v=t.querySelector(".vide"); if(v) v.replaceWith(img); }; img.src=u;
+      });
+    }), {root:g.querySelector(".g-grille"), rootMargin:"400px"});
   tuiles.forEach(t=>obs.observe(t));
   maj();
 }

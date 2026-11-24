@@ -125,6 +125,12 @@ class Api:
                 pass
         threading.Thread(target=tache, daemon=True).start()
 
+    def ouvrir_fichier(self, chemin):
+        """Ouvre une photo ou une vidéo dans l'app par défaut de macOS (Aperçu, QuickTime…)."""
+        f = Path(chemin)
+        if f.is_file() and f.suffix.lower() in core.EXTENSIONS:
+            subprocess.run(["open", str(f)])
+
     def ouvrir(self, url):
         import webbrowser
         webbrowser.open(url)

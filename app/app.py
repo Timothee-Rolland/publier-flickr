@@ -96,11 +96,50 @@ class Api:
     def arreter(self):
         self._arret = True
 
-    def publier(self, albums):
+    def chercher_communes(self, texte):
+        return core.chercher_communes(texte)
+
+    def _a_verrouiller(self, albums, racine):
+        """Fichiers des albums, puis leurs dossiers et les dossiers parents jusqu'à la racine."""
+        fichiers, dossiers = [], set()
+        racine = Path(racine) if racine else None
+        for album in albums:
+            d = Path(album["chemin"])
+            suivi = d / core.SUIVI
+            if not suivi.exists():          # créé avant verrouillage (dossier verrouillé =
+                suivi.write_text("{}")      # plus de création de fichier possible)
+            fichiers += [str(f) for f in core.photos_de(d)]
+            while True:
+                dossiers.add(d)
+                if racine is None or d == racine or racine not in d.parents:
+                    break
+                d = d.parent
+        ordre = sorted(dossiers, key=lambda x: len(x.parts), reverse=True)  # plus profonds d'abord
+        return fichiers + [str(x) for x in ordre]
+
+    def publier(self, albums, racine=None):
         self._arret = False
 
         def tache():
             bilan = []
+            try:
+                verrous = core.verrouiller(self._a_verrouiller(albums, racine))
+            except Exception:
+                traceback.print_exc()
+                verrous = []
+            try:
+                self._publier(albums, bilan)
+            finally:
+                core.deverrouiller(verrous)
+            self._js("surTermine", bilan)
+            try:
+                self._js("surTags", self._flickr.tags_existants())
+                self._js("surAlbumsExistants", self._flickr.albums_existants())
+            except Exception:
+                pass
+        threading.Thread(target=tache, daemon=True).start()
+
+    def _publier(self, albums, bilan):
             for idx, album in enumerate(albums):
                 if self._arret:
                     break
@@ -117,13 +156,6 @@ class Api:
                 res["titre"] = album["titre"]
                 bilan.append(res)
                 self._js("surProgres", {"album": idx, "type": "fin", **res})
-            self._js("surTermine", bilan)
-            try:
-                self._js("surTags", self._flickr.tags_existants())
-                self._js("surAlbumsExistants", self._flickr.albums_existants())
-            except Exception:
-                pass
-        threading.Thread(target=tache, daemon=True).start()
 
     def ouvrir_fichier(self, chemin):
         """Ouvre une photo ou une vidéo dans l'app par défaut de macOS (Aperçu, QuickTime…)."""
@@ -219,6 +251,7 @@ def brancher_depot(fenetre, api):
 
 def main():
     identite_macos()
+    core.deverrouiller()  # au cas où un envoi précédent aurait été interrompu brutalement
     threading.Thread(target=nettoyer_cache, daemon=True).start()
     api = Api()
     fenetre = webview.create_window(

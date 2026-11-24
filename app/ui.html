@@ -75,6 +75,15 @@ button.lien{border:none;background:none;color:var(--accent);padding:0}
 .tuile .badge.ok{background:var(--ok)}
 .tuile .badge + .badge{top:28px}
 .g-aide{font-size:12px;color:var(--doux);padding:0 22px 12px}
+.aide{font-size:12px;color:var(--doux);margin:-6px 0 10px 98px;line-height:1.4}
+.aide.haut{margin:8px 0 0 0}
+.aide b{color:var(--texte);font-weight:600}
+.invalide,.invalide:focus{border-color:var(--erreur)!important;box-shadow:0 0 0 1px var(--erreur)}
+.aide.err{color:var(--erreur)}
+.commune-z{position:relative;flex:1;min-width:200px;max-width:340px}
+.commune-z input{width:100%}
+.commune-z .ok{position:absolute;right:9px;top:8px;color:var(--ok);font-size:13px;pointer-events:none}
+input[type=date]{font:inherit;color:var(--texte);background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:6px 10px}
 .loupe{position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:rgba(12,12,14,.97);display:flex;flex-direction:column;color:#fff}
 .loupe .l-tete{display:flex;align-items:center;gap:12px;padding:12px 18px}
 .loupe .l-tete span{flex:1;font-size:13px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -277,10 +286,15 @@ function ecranDepot(){
 function surAnalyse(r){
   if(S.enCours) return toast("Publication en cours : attendez la fin");
   if(!r.albums.length){ toast("Aucune photo trouvée dans « "+r.nom+" »"); return; }
+  S.termine=false;
   S.analyse=r;
-  S.commun = [...S.etat.tags_defaut];
+  const plusieurs = r.albums.length>1;
+  // un seul album : pas de « tags pour tous », les tags par défaut vont directement dans l'album
+  S.commun = plusieurs ? [...S.etat.tags_defaut] : [];
   const communs=new Set(S.commun.map(cle));
-  S.albums = r.albums.map(a=>({...a, inclus:true, tags:a.tags.filter(t=>!communs.has(cle(t))),
+  const fusion=t=>{const vus=new Set(); return t.filter(x=>!vus.has(cle(x))&&vus.add(cle(x)))};
+  S.albums = r.albums.map(a=>({...a, inclus:true,
+      tags: plusieurs ? a.tags.filter(t=>!communs.has(cle(t))) : fusion([...S.etat.tags_defaut, ...a.tags]),
       public: a.public===null||a.public===undefined ? S.etat.public_defaut : a.public, cible:null, exclus:new Set()}));
   rendreAlbums();
 }
@@ -289,28 +303,81 @@ function rendreAlbums(){
   $("#main").innerHTML = `
     <div class="barre"><h2>📁 ${esc(r.nom)}</h2>
       <button id="changer">Changer de dossier</button></div>
+    ${S.albums.length>1?`
     <div class="bloc"><h3>Tags pour tous les albums</h3><div id="commun"></div>
+      <div class="aide haut">Élus présents au format <b>P.Nom</b> (ex. J.Dupont), séparés par des virgules.</div>
       <div class="rapides" id="rapides"></div></div>
     <div class="bloc" style="display:flex;gap:14px;align-items:center">
-      <span style="flex:1;color:var(--doux)">${S.albums.length} album${S.albums.length>1?"s":""} détecté${S.albums.length>1?"s":""}</span>
+      <span style="flex:1;color:var(--doux)">${S.albums.length} albums détectés</span>
       <span class="case">Visibilité de tous :</span>
       <div class="segment"><button data-tous="0">Privé</button><button data-tous="1">Public</button></div>
-    </div>
+    </div>`:""}
     <div id="liste"></div>`;
   $("#changer").onclick=()=>{ if(!S.enCours) ecranDepot() };
-  champTags($("#commun"), S.commun, rapides);
-  rapides();
+  if(S.albums.length>1){
+    const z=$("#rapides"), c=$("#commun");
+    z._maj=()=>rapides(S.commun, z, c);
+    champTags(c, S.commun, z._maj); z._maj();
+  }
   document.querySelectorAll("[data-tous]").forEach(b=>b.onclick=()=>{
     S.albums.forEach(a=>a.public=b.dataset.tous==="1"); rendreListe(); });
   rendreListe();
   $("#pied").style.display="flex"; resume();
 }
-function rapides(){
-  const deja=new Set(S.commun.map(cle));
+/* boutons « Les plus utilisés » sous un champ de tags */
+function rapides(liste, zone, champ){
+  const deja=new Set([...liste, ...S.commun].map(cle));
   const top=S.tags.filter(t=>!deja.has(t.cle)).slice(0,14);
-  $("#rapides").innerHTML = top.length ? `<span class="case">Les plus utilisés :</span>` +
+  zone.innerHTML = top.length ? `<span class="case">Les plus utilisés :</span>` +
     top.map(t=>`<button data-t="${esc(t.tag)}">+ ${esc(t.tag)}</button>`).join("") : "";
-  $("#rapides").querySelectorAll("button").forEach(b=>b.onclick=()=>{S.commun.push(b.dataset.t);$("#commun")._rendre();rapides()});
+  zone.querySelectorAll("button").forEach(b=>b.onclick=()=>{liste.push(b.dataset.t); champ._rendre(); rapides(liste,zone,champ)});
+}
+/* ---------- titre + date ---------- */
+function titreFlickr(a){
+  const t=(a.titre||"").trim(); if(!a.date) return t;
+  const [y,m,j]=a.date.split("-"); return `${t} - ${j}.${m}.${y.slice(2)}`;
+}
+function decouperTitre(t){
+  const m=/\s+-\s+(\d{2})\.(\d{2})\.(\d{2})$/.exec(t||"");
+  return m ? [t.slice(0,m.index).trim(), `20${m[3]}-${m[2]}-${m[1]}`] : [(t||"").trim(), ""];
+}
+/* ---------- commune : uniquement une commune du référentiel officiel ---------- */
+function champCommune(zone, a){
+  const inp=zone.querySelector("input"); let minuterie=null, res=[], sel=0, demande=0;
+  function fermer(){ const m=zone.querySelector(".menu"); if(m) m.remove(); }
+  function afficher(){
+    fermer(); if(!res.length) return;
+    const m=document.createElement("div"); m.className="menu";
+    m.innerHTML=res.map((c,k)=>`<div data-k="${k}" class="${k===sel?"sel":""}"><span>${esc(c.nom)} <span class="n">(${esc(c.dep)})</span></span><span class="n">${esc(c.cp)}</span></div>`).join("");
+    [...m.children].forEach(el=>el.onmousedown=e=>{e.preventDefault(); choisir(res[+el.dataset.k])});
+    zone.appendChild(m);
+  }
+  function choisir(c){
+    a.commune=c; inp.value=`${c.nom} (${c.dep})`; inp.classList.remove("invalide"); fermer();
+    let ok=zone.querySelector(".ok"); if(!ok){ ok=document.createElement("span"); ok.className="ok"; ok.textContent="✓"; zone.appendChild(ok); }
+  }
+  inp.addEventListener("input",()=>{
+    a.commune=null; const ok=zone.querySelector(".ok"); if(ok) ok.remove();
+    clearTimeout(minuterie); const q=inp.value.trim();
+    if(q.length<2){ res=[]; fermer(); return; }
+    minuterie=setTimeout(async()=>{
+      const n=++demande; const r=await pywebview.api.chercher_communes(q);
+      if(n!==demande) return;
+      if(r===null){ res=[]; fermer(); toast("Recherche de communes indisponible (connexion ?)"); return; }
+      res=r; sel=0; afficher();
+    },250);
+  });
+  inp.addEventListener("keydown",e=>{
+    if(!res.length) return;
+    if(e.key==="ArrowDown"){ sel=(sel+1)%res.length; afficher(); e.preventDefault(); }
+    else if(e.key==="ArrowUp"){ sel=(sel-1+res.length)%res.length; afficher(); e.preventDefault(); }
+    else if(e.key==="Enter"){ e.preventDefault(); choisir(res[sel]); }
+    else if(e.key==="Escape") fermer();
+  });
+  inp.addEventListener("blur",()=>setTimeout(()=>{
+    fermer();
+    if(!a.commune && inp.value.trim()) inp.classList.add("invalide");   // texte libre refusé
+  },150));
 }
 /* destination : choix de l'utilisateur, sinon l'album du dossier s'il existe encore, sinon nouveau */
 function cibleDe(a){
@@ -326,13 +393,15 @@ function rendreListe(){
     const cible = cibleDe(a);
     const charges = S.albumsFlickr.length>0;
     const supprime = charges && a.album_id && !S.albumsFlickr.some(x=>x.id===a.album_id);
-    const homonyme = cible==="nouveau" && S.albumsFlickr.find(x=>x.titre.trim().toLowerCase()===a.titre.trim().toLowerCase());
+    const homonyme = cible==="nouveau" && S.albumsFlickr.find(x=>x.titre.trim().toLowerCase()===titreFlickr(a).toLowerCase());
     d.innerHTML = `
       <div class="vignettes" title="Voir et choisir les fichiers">${[0,1,2,3].map(j=>`<div data-v="${j}"></div>`).join("")}
         <div class="voir">Voir les ${a.nb} fichiers<br>et choisir</div></div>
       <div>
-        <div class="ligne"><input type="text" class="titre" value="${esc(a.titre)}">
+        <div class="ligne"><input type="text" class="titre" value="${esc(a.titre)}" placeholder="Titre de l'album (sans date)">
           <label class="case" style="width:auto"><input type="checkbox" class="inclus" ${a.inclus?"checked":""}> Publier</label></div>
+        <div class="aide" style="margin-left:0">Uniquement le titre de l'album : la date est ajoutée automatiquement.
+          Sur Flickr : <b class="apercu-titre">${esc(titreFlickr(a))}</b></div>
         <div class="meta">${a.relatif==="."?"Dossier principal":esc(a.relatif)} · ${a.nb} fichier${a.nb>1?"s":""}
           ${a.deja?` · <b>${a.deja} déjà en ligne</b>`:""}${a.exclus.size?` · <span style="color:var(--nouveau)">${aEnvoyer(a)} sélectionné${aEnvoyer(a)>1?"s":""} sur ${a.nb-a.deja}</span>`:""}</div>
         <div class="ligne"><label>Album Flickr</label>
@@ -345,25 +414,37 @@ function rendreListe(){
         ${supprime?`<div class="avert">L'album créé précédemment pour ce dossier n'existe plus sur Flickr : un nouvel album sera créé, avec les photos déjà envoyées.</div>`:""}
         ${homonyme?`<div class="avert">Un album « ${esc(homonyme.titre)} » existe déjà sur Flickr.
           <button class="lien" data-h="${esc(homonyme.id)}">Y ajouter les photos</button></div>`:""}
-        <div class="ligne"><label>Tags en plus</label><div class="t"></div></div>
-        <div class="ligne"><label>Description</label><textarea class="desc">${esc(a.description)}</textarea></div>
-        <div class="ligne"><label>Commune</label><input type="text" class="commune" value="${esc(a.commune)}" placeholder="Pour la carte (si pas de GPS)" style="max-width:260px">
+        <div class="ligne"><label>Date</label><input type="date" class="date" value="${esc(a.date||"")}">
+          <span class="aide err date-err" style="margin:0">${a.date?"":"Date de l'événement obligatoire"}</span></div>
+        <div class="ligne"><label>${S.albums.length>1?"Tags en plus":"Tags"}</label><div class="t"></div></div>
+        <div class="aide">Élus présents au format <b>P.Nom</b> (ex. J.Dupont).</div>
+        ${S.albums.length>1?"":`<div class="rapides" style="margin:-4px 0 12px 98px"></div>`}
+        <div class="ligne"><label>Description</label><textarea class="desc" placeholder="Petit verbatim de l'événement…">${esc(a.description)}</textarea></div>
+        <div class="aide">Rappel : un <b>petit verbatim de l'événement</b> est demandé (ce qui s'est dit, une phrase marquante…).</div>
+        <div class="ligne"><label>Commune</label>
+          <div class="commune-z"><input type="text" class="commune" value="${esc(a.commune?a.commune.nom+" ("+a.commune.dep+")":"")}"
+            placeholder="Rechercher une commune…" autocomplete="off" spellcheck="false">${a.commune?`<span class="ok">✓</span>`:""}</div>
           <span style="flex:1"></span>
           <div class="segment"><button class="vis ${!a.public?"actif":""}" data-p="0">Privé</button><button class="vis ${a.public?"actif":""}" data-p="1">Public</button></div></div>
         <div class="suivi"></div>
       </div>`;
     L.appendChild(d);
-    d.querySelector(".titre").oninput=e=>{a.titre=e.target.value};
+    d.querySelector(".titre").oninput=e=>{a.titre=e.target.value; d.querySelector(".apercu-titre").textContent=titreFlickr(a)};
+    d.querySelector(".date").onchange=e=>{a.date=e.target.value; d.querySelector(".apercu-titre").textContent=titreFlickr(a);
+      d.querySelector(".date-err").textContent=a.date?"":"Date de l'événement obligatoire"; e.target.classList.remove("invalide")};
     d.querySelector(".titre").onchange=()=>rendreListe();
     d.querySelector(".inclus").onchange=e=>{a.inclus=e.target.checked;d.classList.toggle("exclu",!a.inclus);resume()};
     d.querySelector(".desc").oninput=e=>a.description=e.target.value;
-    d.querySelector(".commune").oninput=e=>a.commune=e.target.value;
-    const choisir = v=>{ a.cible=v; const x=S.albumsFlickr.find(y=>y.id===v); if(x) a.titre=x.titre; rendreListe(); };
+    champCommune(d.querySelector(".commune-z"), a);
+    const choisir = v=>{ a.cible=v; const x=S.albumsFlickr.find(y=>y.id===v);
+      if(x){ const [t,dt]=decouperTitre(x.titre); a.titre=t; if(dt) a.date=dt; } rendreListe(); };
     d.querySelector(".cible").onchange=e=>choisir(e.target.value);
     const h=d.querySelector("[data-h]"); if(h) h.onclick=()=>choisir(h.dataset.h);
     d.querySelectorAll(".vis").forEach(b=>b.onclick=()=>{a.public=b.dataset.p==="1";
       d.querySelectorAll(".vis").forEach(x=>x.classList.toggle("actif",x===b))});
-    champTags(d.querySelector(".t"), a.tags);
+    const zr=d.querySelector(".rapides"), ct=d.querySelector(".t");
+    if(zr){ zr._maj=()=>rapides(a.tags, zr, ct); champTags(ct, a.tags, zr._maj); zr._maj(); }
+    else champTags(ct, a.tags);
     d.querySelector(".vignettes").onclick=()=>ouvrirGalerie(i);
     a.apercu.forEach(async(p,j)=>{const u=await pywebview.api.apercu(p,240);
       if(u){const v=d.querySelector(`[data-v="${j}"]`); if(v) v.style.backgroundImage=`url(${u})`}});
@@ -479,6 +560,7 @@ function resume(){
   const inc=S.albums.filter(a=>a.inclus);
   const n=inc.reduce((s,a)=>s+aEnvoyer(a),0);
   $("#resume").textContent = `${inc.length} album${inc.length>1?"s":""} · ${n} fichier${n>1?"s":""} à envoyer`;
+  if(S.termine){ $("#btnPublier").disabled=false; $("#btnPublier").textContent="Importer un nouvel album"; return; }
   $("#btnPublier").disabled = !inc.length || !S.moi || S.enCours;
   $("#btnPublier").textContent = S.moi ? "Publier" : "Connectez-vous d'abord";
 }
@@ -486,15 +568,31 @@ function resume(){
 /* ---------- publication ---------- */
 let file=[];
 $("#btnPublier").onclick=()=>{
+  if(S.termine){ S.termine=false; ecranDepot(); return; }
   file = S.albums.map((a,i)=>({a,i})).filter(x=>x.a.inclus);
   if(!file.length) return;
-  const albums = file.map(({a})=>({chemin:a.chemin, titre:a.titre, description:a.description,
+  // contrôles : titre et date obligatoires, commune choisie dans la liste
+  let erreurs=[];
+  file.forEach(({a,i})=>{
+    const c=$("#alb"+i);
+    if(!a.titre.trim()){ c.querySelector(".titre").classList.add("invalide"); erreurs.push("titre"); }
+    if(!a.date){ c.querySelector(".date").classList.add("invalide"); erreurs.push("date"); }
+    const ic=c.querySelector(".commune");
+    if(!a.commune && ic.value.trim()){ ic.classList.add("invalide"); erreurs.push("commune"); }
+  });
+  if(erreurs.length){
+    const m={titre:"un titre",date:"une date",commune:"une commune choisie dans la liste"};
+    toast("Il manque "+[...new Set(erreurs)].map(e=>m[e]).join(", ")+".");
+    document.querySelector(".invalide")?.scrollIntoView({block:"center",behavior:"smooth"});
+    return;
+  }
+  const albums = file.map(({a})=>({chemin:a.chemin, titre:a.titre, date:a.date, description:a.description,
       commune:a.commune, public:a.public, cible:cibleDe(a), exclus:[...a.exclus],
       tags:[...S.commun, ...a.tags.filter(t=>!S.commun.some(c=>cle(c)===cle(t)))]}));
   S.enCours=true; resume(); $("#btnArret").style.display="";
   document.querySelectorAll("#liste input,#liste textarea,#liste button,#liste select").forEach(e=>e.disabled=true);
   file.forEach(({i})=>$("#alb"+i+" .suivi").innerHTML=`<div class="progres"><div></div></div><div class="statut">En attente…</div><div class="journal"></div>`);
-  pywebview.api.publier(albums);
+  pywebview.api.publier(albums, S.analyse.racine);
 };
 $("#btnArret").onclick=()=>{pywebview.api.arreter(); $("#btnArret").textContent="Arrêt en cours…"};
 function surProgres(ev){
@@ -517,13 +615,14 @@ function surProgres(ev){
 async function surTermine(bilan){
   S.enCours=false; $("#btnArret").style.display="none"; $("#btnArret").textContent="Arrêter";
   const n=bilan.reduce((s,b)=>s+b.envoyees,0), e=bilan.reduce((s,b)=>s+b.echecs.length,0);
-  toast(`Terminé : ${n} photo${n>1?"s":""} envoyée${n>1?"s":""}`+(e?`, ${e} échec(s)`:""));
+  toast(`Terminé : ${n} fichier${n>1?"s":""} envoyé${n>1?"s":""}`+(e?`, ${e} échec(s)`:""));
+  S.termine = !e && bilan.length===file.length;   // tout est passé : on propose un nouvel import
   // ré-analyse pour refléter l'état en ligne, en gardant les saisies
   const saisies = S.albums; const r = await pywebview.api.analyser(S.analyse.racine);
   S.analyse=r;
   S.albums = r.albums.map(a=>{const p=saisies.find(x=>x.chemin===a.chemin)||{};
-    return {...a, inclus:p.inclus??true, tags:p.tags??[...a.tags], titre:p.titre??a.titre,
-      description:p.description??a.description, commune:p.commune??a.commune,
+    return {...a, inclus:p.inclus??true, tags:p.tags??[...a.tags], titre:p.titre??a.titre, date:p.date??a.date,
+      description:p.description??a.description, commune:p.commune===undefined?a.commune:p.commune,
       public:p.public??S.etat.public_defaut, cible:null, exclus:p.exclus??new Set()}});
   const anciens=[...document.querySelectorAll(".suivi")].map(x=>x.innerHTML);
   rendreListe(); document.querySelectorAll(".suivi").forEach((x,k)=>x.innerHTML=anciens[k]||"");
@@ -545,7 +644,7 @@ function surTags(t){
   t=t.map(x=>({...x, tag:String(x.tag), cle:String(x.cle)}));
   S.tags=t; S.index=new Map(t.map(x=>[x.cle,x]));
   document.querySelectorAll(".tags").forEach(c=>c._rendre&&c._rendre());
-  if($("#rapides")) rapides();
+  document.querySelectorAll(".rapides").forEach(z=>z._maj&&z._maj());
 }
 function surAlbumsExistants(a){ S.albumsFlickr=a.map(x=>({id:String(x.id), titre:String(x.titre)})); if(S.analyse && !S.enCours) rendreListe(); }
 function surErreur(m){ toast(m) }

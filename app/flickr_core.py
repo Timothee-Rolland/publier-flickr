@@ -1,6 +1,9 @@
 """Logique Flickr partagée : connexion, tags, albums, analyse de dossiers, publication."""
 import configparser
 import json
+import os
+import re
+import stat
 import time
 import unicodedata
 import urllib.parse
@@ -100,6 +103,115 @@ def geocoder(commune):
         return None
 
 
+# ---------------------------------------------------------------- communes
+def chercher_communes(texte, limite=8):
+    """Recherche dans le référentiel officiel des communes (geo.api.gouv.fr).
+    Les communes des Yvelines passent en premier."""
+    texte = texte.strip()
+    if len(texte) < 2:
+        return []
+    url = ("https://geo.api.gouv.fr/communes?" + urllib.parse.urlencode({
+        "nom": texte, "fields": "nom,code,codeDepartement,codesPostaux,centre",
+        "boost": "population", "limit": 30}))
+    try:
+        with urllib.request.urlopen(url, timeout=8) as r:
+            donnees = json.load(r)
+    except Exception:
+        return None  # hors ligne
+    donnees.sort(key=lambda c: c.get("codeDepartement") != "78")  # tri stable
+    res = []
+    for c in donnees[:limite]:
+        lon, lat = (c.get("centre") or {}).get("coordinates", [None, None])
+        res.append({"nom": c["nom"], "code": c["code"], "dep": c.get("codeDepartement", ""),
+                    "cp": (c.get("codesPostaux") or [""])[0], "lat": lat, "lon": lon})
+    return res
+
+
+# ---------------------------------------------------------------- dates
+DATE_TITRE = re.compile(r"\s+-\s+(\d{2})\.(\d{2})\.(\d{2})$")
+
+
+def titre_avec_date(titre, date_iso):
+    """« Théâtre » + « 2026-11-20 » -> « Théâtre - 20.11.26 »."""
+    titre = titre.strip()
+    if not date_iso:
+        return titre
+    a, m, j = date_iso.split("-")
+    return f"{titre} - {j}.{m}.{a[2:]}"
+
+
+def decouper_titre(titre):
+    """« Théâtre - 20.11.26 » -> (« Théâtre », « 2026-11-20 »)."""
+    m = DATE_TITRE.search(titre or "")
+    if not m:
+        return (titre or "").strip(), ""
+    j, mo, a = m.groups()
+    return titre[:m.start()].strip(), f"20{a}-{mo}-{j}"
+
+
+def date_prise_de_vue(photos):
+    """Date EXIF de la première photo qui en a une (« AAAA-MM-JJ »), sinon ""."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return ""
+    for p in [x for x in photos if x.suffix.lower() in IMAGES][:10]:
+        try:
+            exif = Image.open(p).getexif()
+            brut = exif.get_ifd(0x8769).get(36867) or exif.get(306)
+            if brut and re.match(r"\d{4}:\d{2}:\d{2}", str(brut)):
+                return str(brut)[:10].replace(":", "-")
+        except Exception:
+            continue
+    return ""
+
+
+# ---------------------------------------------------------------- verrouillage
+# Pendant un envoi, le dossier et ses fichiers sont verrouillés (comme « Verrouillé »
+# dans Lire les informations du Finder) : le Finder refuse de les supprimer sans
+# confirmation. Ils sont déverrouillés à la fin, même en cas d'erreur.
+VERROU = getattr(stat, "UF_IMMUTABLE", 0)
+FICHIER_VERROUS = ICI / "verrous.json"
+
+
+def verrouiller(chemins):
+    """Verrouille les chemins (fichiers d'abord, dossiers ensuite) ; renvoie ceux verrouillés
+    par l'app (ceux déjà verrouillés par l'utilisateur ne sont pas touchés)."""
+    if not VERROU or not hasattr(os, "chflags"):
+        return []
+    faits = []
+    for c in chemins:
+        try:
+            fl = os.lstat(c).st_flags
+            if fl & VERROU:
+                continue
+            os.chflags(c, fl | VERROU)
+            faits.append(str(c))
+        except OSError:
+            pass
+    FICHIER_VERROUS.write_text(json.dumps(faits, ensure_ascii=False))
+    return faits
+
+
+def deverrouiller(chemins=None):
+    """Déverrouille ; sans argument, reprend une liste laissée par un arrêt brutal."""
+    if chemins is None:
+        try:
+            chemins = json.loads(FICHIER_VERROUS.read_text())
+        except Exception:
+            return
+    if hasattr(os, "chflags") and VERROU:
+        for c in reversed(chemins):
+            try:
+                os.chflags(c, os.lstat(c).st_flags & ~VERROU)
+            except OSError:
+                pass
+    try:
+        FICHIER_VERROUS.unlink()
+    except OSError:
+        pass
+
+
 # ---------------------------------------------------------------- dossiers
 def photos_de(dossier):
     return sorted(p for p in dossier.iterdir()
@@ -131,16 +243,19 @@ def analyser(chemin):
             continue
         suivi = lire_suivi(d)
         deja = suivi.get("photos", {})
+        titre, date_titre = decouper_titre(suivi.get("titre", d.name))
+        commune = suivi.get("commune_info")  # {nom, code, dep, cp, lat, lon}
         albums.append({
             "chemin": str(d),
             "relatif": "." if d == racine else str(d.relative_to(racine)),
-            "titre": suivi.get("titre", d.name),
+            "titre": titre,
+            "date": suivi.get("date") or date_titre or date_prise_de_vue(ph),
             "nb": len(ph),
             "deja": sum(1 for p in ph if p.name in deja),
             "tags": [t.strip() for t in suivi.get("tags", "").split(",") if t.strip()]
                     if suivi.get("tags") else [],
             "description": suivi.get("description", ""),
-            "commune": suivi.get("commune", ""),
+            "commune": commune if isinstance(commune, dict) else None,
             "public": suivi.get("public"),
             "album_id": suivi.get("album_id"),
             "apercu": [str(p) for p in ph[:4]],
@@ -241,15 +356,20 @@ class Flickr:
         dossier = Path(album["chemin"])
         suivi = lire_suivi(dossier)
         envoyees = suivi.get("photos", {})
-        titre = album["titre"].strip() or dossier.name
+        titre_seul = album["titre"].strip() or dossier.name
+        date_iso = album.get("date") or ""
+        titre = titre_avec_date(titre_seul, date_iso)  # titre affiché sur Flickr
         description = album.get("description", "")
         est_public = bool(album.get("public"))
         public = "1" if est_public else "0"
         tags = formater_tags(album.get("tags", []))
-        commune = album.get("commune", "").strip()
-        lieu = geocoder(commune) if commune else None
-        if commune and not lieu:
-            progres({"type": "info", "msg": f"Commune « {commune} » introuvable : pas de localisation."})
+        commune = album.get("commune") or None
+        if isinstance(commune, dict) and commune.get("lat") is not None:
+            lieu = (commune["lat"], commune["lon"], commune["nom"])
+        elif isinstance(commune, str) and commune.strip():  # ancien format
+            lieu = geocoder(commune.strip())
+        else:
+            lieu = None
 
         cible = str(album.get("cible") or suivi.get("album_id") or "nouveau")
         set_id = None
@@ -265,8 +385,9 @@ class Flickr:
         suivi["album_id"] = set_id
         suivi["album_externe"] = externe
         changement = "public" in suivi and suivi["public"] != est_public
-        suivi.update(titre=titre, tags=", ".join(album.get("tags", [])),
-                     description=description, commune=commune, public=est_public)
+        suivi.update(titre=titre, date=date_iso, tags=", ".join(album.get("tags", [])),
+                     description=description, public=est_public,
+                     commune_info=commune if isinstance(commune, dict) else None)
 
         def sauver():
             suivi["photos"] = envoyees

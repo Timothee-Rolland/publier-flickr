@@ -129,6 +129,10 @@ input.titre{font-size:16px;font-weight:600}
 .rapides button{font-size:12px;padding:3px 10px;border-radius:20px}
 .avert{font-size:12px;background:var(--nouveau-doux);color:var(--nouveau);border-radius:8px;padding:7px 10px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .avert select{font:inherit;font-size:12px}
+.avert.err-flickr{background:#fdecea;color:var(--erreur);display:block;line-height:1.5}
+@media (prefers-color-scheme: dark){.avert.err-flickr{background:#3d1f1c}}
+.tuile.lourd{box-shadow:none;opacity:.55;cursor:zoom-in}
+.tuile .badge.err{background:var(--erreur)}
 select.cible{font:inherit;flex:1;min-width:220px;max-width:520px;padding:6px 8px;border:1px solid var(--bord);border-radius:8px;background:var(--bg);color:var(--texte)}
 .progres{height:6px;background:var(--bg);border-radius:4px;overflow:hidden;margin-top:6px}
 .progres div{height:100%;background:var(--accent);width:0;transition:width .3s}
@@ -162,7 +166,7 @@ select.cible{font:inherit;flex:1;min-width:220px;max-width:520px;padding:6px 8px
 <script>
 window.addEventListener("error", e=>{ try{ pywebview.api.journal(`${e.message} (ligne ${e.lineno})`) }catch(_){}
   const t=document.getElementById("toast"); if(t){t.textContent="Erreur : "+e.message;t.classList.add("vu")} });
-const S = {etat:null, moi:null, tags:[], index:new Map(), albumsFlickr:[], analyse:null,
+const S = {limites:{photo:200*1024**2, video:1024**3, duree:0}, etat:null, moi:null, tags:[], index:new Map(), albumsFlickr:[], analyse:null,
            albums:[], commun:[], enCours:false};
 const $ = s => document.querySelector(s);
 const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -287,6 +291,8 @@ function surAnalyse(r){
   if(S.enCours) return toast("Publication en cours : attendez la fin");
   if(!r.albums.length){ toast("Aucune photo trouvée dans « "+r.nom+" »"); return; }
   S.termine=false;
+  const lourds=r.albums.flatMap(a=>a.fichiers).filter(tropLourd);
+  if(lourds.length) setTimeout(()=>toast(`⚠ ${lourds.length} fichier${lourds.length>1?"s":""} trop lourd${lourds.length>1?"s":""} pour Flickr : ${lourds.length>1?"ils seront ignorés":"il sera ignoré"}`),400);
   S.analyse=r;
   const plusieurs = r.albums.length>1;
   // un seul album : pas de « tags pour tous », les tags par défaut vont directement dans l'album
@@ -404,6 +410,13 @@ function rendreListe(){
           Sur Flickr : <b class="apercu-titre">${esc(titreFlickr(a))}</b></div>
         <div class="meta">${a.relatif==="."?"Dossier principal":esc(a.relatif)} · ${a.nb} fichier${a.nb>1?"s":""}
           ${a.deja?` · <b>${a.deja} déjà en ligne</b>`:""}${a.exclus.size?` · <span style="color:var(--nouveau)">${aEnvoyer(a)} sélectionné${aEnvoyer(a)>1?"s":""} sur ${a.nb-a.deja}</span>`:""}</div>
+        ${(()=>{ const lourds=a.fichiers.filter(tropLourd); if(!lourds.length) return "";
+          const v=lourds.some(f=>f.video), ph=lourds.some(f=>!f.video);
+          return `<div class="avert err-flickr">⚠ ${lourds.length} fichier${lourds.length>1?"s dépassent":" dépasse"} la limite de Flickr
+            (${[v?`${taille(S.limites.video)} par vidéo`:"", ph?`${taille(S.limites.photo)} par photo`:""].filter(Boolean).join(", ")})
+            et ${lourds.length>1?"seront ignorés":"sera ignoré"} :
+            ${lourds.slice(0,4).map(f=>`<b>${esc(f.nom)}</b> (${taille(f.taille)})`).join(", ")}${lourds.length>4?"…":""}.
+            ${v?"Pour une vidéo longue, préférez YouTube, ou découpez-la / réduisez-la avant l'envoi.":""}</div>`; })()}
         <div class="ligne"><label>Album Flickr</label>
           <select class="cible">
             <option value="nouveau" ${cible==="nouveau"?"selected":""}>➕ Créer un nouvel album</option>
@@ -451,7 +464,13 @@ function rendreListe(){
   });
 }
 /* ---------- galerie : choisir les fichiers à envoyer ---------- */
-function aEnvoyer(a){ return a.fichiers.filter(f=>!f.deja && !a.exclus.has(f.nom)).length; }
+function aEnvoyer(a){ return a.fichiers.filter(f=>!f.deja && !tropLourd(f) && !a.exclus.has(f.nom)).length; }
+/* ---------- limites de Flickr (taille par fichier) ---------- */
+function maxPour(f){ return f.video ? S.limites.video : S.limites.photo; }
+function tropLourd(f){ return !f.deja && f.taille > maxPour(f); }
+function taille(o){ const u=["o","Ko","Mo","Go","To"]; let i=0; while(o>=1024&&i<4){o/=1024;i++}
+  return (i<2?Math.round(o):Math.round(o*10)/10).toString().replace(".",",")+" "+u[i]; }
+function surLimites(l){ S.limites=l; if(S.analyse && !S.enCours){ rendreListe(); resume(); } }
 const fileApercus=[]; let apercusEnCours=0;
 function chargerApercu(chemin, taille, rappel){ fileApercus.push([chemin,taille,rappel]); pomperApercus(); }
 function pomperApercus(){
@@ -465,7 +484,7 @@ function pomperApercus(){
 function ouvrirGalerie(i){
   if(S.enCours) return toast("Publication en cours : attendez la fin");
   const a=S.albums[i]; let dernier=null;
-  const dispo=a.fichiers.filter(f=>!f.deja).length;
+  const dispo=a.fichiers.filter(f=>!f.deja && !tropLourd(f)).length;
   const g=document.createElement("div"); g.className="galerie";
   g.innerHTML=`<div class="g-tete">
       <div class="g-titre"><b>${esc(a.titre)}</b><span class="g-compte"></span></div>
@@ -473,20 +492,20 @@ function ouvrirGalerie(i){
       <button class="primaire" data-act="ok">Terminé</button></div>
     ${dispo?"":`<div class="g-info">✓ Tous les fichiers de cet album sont déjà sur Flickr : il n'y a rien de nouveau à envoyer.</div>`}
     <div class="g-grille">${a.fichiers.map((f,j)=>`
-      <div class="tuile ${f.deja?"deja":""}" data-j="${j}">
+      <div class="tuile ${f.deja?"deja":""} ${tropLourd(f)?"lourd":""}" data-j="${j}">
         <div class="vide"></div>
-        ${f.deja?`<span class="badge ok">✓ En ligne</span>`:`<span class="coche" title="Inclure / exclure de l'envoi"></span>`}
+        ${f.deja?`<span class="badge ok">✓ En ligne</span>`:tropLourd(f)?`<span class="badge err" title="Maximum Flickr : ${taille(maxPour(f))}">Trop lourd · ${taille(f.taille)}</span>`:`<span class="coche" title="Inclure / exclure de l'envoi"></span>`}
         ${f.video?`<span class="badge">▶ Vidéo</span>`:""}
         <div class="nom">${esc(f.nom)}</div></div>`).join("")}</div>
     <div class="g-aide">${dispo?"Cliquez sur une image pour l'agrandir · la pastille ✓ inclut ou exclut le fichier · Maj+clic sur la pastille : toute une plage · ":"Cliquez sur une image pour l'agrandir · "}Échap : fermer</div>`;
   document.body.appendChild(g);
   const tuiles=[...g.querySelectorAll(".tuile")];
   function maj(){
-    tuiles.forEach(t=>{const f=a.fichiers[+t.dataset.j]; if(!f.deja) t.classList.toggle("non",a.exclus.has(f.nom))});
+    tuiles.forEach(t=>{const f=a.fichiers[+t.dataset.j]; if(!f.deja && !tropLourd(f)) t.classList.toggle("non",a.exclus.has(f.nom))});
     g.querySelector(".g-compte").textContent=`${aEnvoyer(a)} sur ${dispo} à envoyer`+(a.deja?` · ${a.deja} déjà en ligne`:"");
   }
   function basculer(j, exclure){
-    const f=a.fichiers[j]; if(f.deja) return;
+    const f=a.fichiers[j]; if(f.deja || tropLourd(f)) return;
     if(exclure===undefined) exclure=!a.exclus.has(f.nom);
     exclure ? a.exclus.add(f.nom) : a.exclus.delete(f.nom);
   }
@@ -512,7 +531,8 @@ function ouvrirGalerie(i){
       <div class="l-image"><span class="chargement">Chargement…</span>
         ${j>0?`<button class="nav prec" data-l="prec">‹</button>`:""}
         ${j<a.fichiers.length-1?`<button class="nav suiv" data-l="suiv">›</button>`:""}</div>
-      <div class="l-pied">${f.deja?`<label>✓ Déjà en ligne sur Flickr</label>`:
+      <div class="l-pied">${f.deja?`<label>✓ Déjà en ligne sur Flickr</label>`:tropLourd(f)?
+        `<label>⚠ Trop lourd pour Flickr : ${taille(f.taille)} (maximum ${taille(maxPour(f))})</label>`:
         `<label><input type="checkbox" ${a.exclus.has(f.nom)?"":"checked"}> Inclure dans l'envoi</label>`}</div>`;
     const cb=lp.querySelector("input[type=checkbox]");
     if(cb) cb.onchange=()=>{ basculer(j, !cb.checked); maj(); };
@@ -587,7 +607,7 @@ $("#btnPublier").onclick=()=>{
     return;
   }
   const albums = file.map(({a})=>({chemin:a.chemin, titre:a.titre, date:a.date, description:a.description,
-      commune:a.commune, public:a.public, cible:cibleDe(a), exclus:[...a.exclus],
+      commune:a.commune, public:a.public, cible:cibleDe(a), exclus:[...a.exclus, ...a.fichiers.filter(tropLourd).map(f=>f.nom)],
       tags:[...S.commun, ...a.tags.filter(t=>!S.commun.some(c=>cle(c)===cle(t)))]}));
   S.enCours=true; resume(); $("#btnArret").style.display="";
   document.querySelectorAll("#liste input,#liste textarea,#liste button,#liste select").forEach(e=>e.disabled=true);

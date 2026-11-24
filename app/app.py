@@ -61,6 +61,7 @@ class Api:
                 self._flickr = core.Flickr()
                 moi = self._flickr.connecter()
                 self._js("surConnexion", {"ok": True, "moi": moi})
+                self._js("surLimites", self._flickr.limites())
                 self._js("surTags", self._flickr.tags_existants())
                 self._js("surAlbumsExistants", self._flickr.albums_existants())
             except Exception as e:

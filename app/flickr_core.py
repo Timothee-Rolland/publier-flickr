@@ -103,6 +103,15 @@ def geocoder(commune):
         return None
 
 
+def taille_lisible(octets):
+    for unite in ("o", "Ko", "Mo", "Go", "To"):
+        if octets < 1024 or unite == "To":
+            if unite in ("o", "Ko"):
+                return f"{octets:.0f} {unite}"
+            return f"{octets:.1f}".rstrip("0").rstrip(".").replace(".", ",") + f" {unite}"
+        octets /= 1024
+
+
 # ---------------------------------------------------------------- communes
 def chercher_communes(texte, limite=8):
     """Recherche dans le référentiel officiel des communes (geo.api.gouv.fr).
@@ -261,6 +270,7 @@ def analyser(chemin):
             "apercu": [str(p) for p in ph[:4]],
             "fichiers": [{"nom": p.name, "chemin": str(p),
                           "video": p.suffix.lower() in VIDEOS,
+                          "taille": p.stat().st_size,
                           "deja": p.name in deja} for p in ph],
         })
     return {"racine": str(racine), "nom": racine.name, "albums": albums}
@@ -302,6 +312,30 @@ class Flickr:
         except flickrapi.exceptions.FlickrError:
             pass
         return sorted(tags.values(), key=lambda t: (-t["nb"], t["tag"].lower()))
+
+    # Limites par défaut de Flickr (aide Flickr) si le compte ne les communique pas
+    LIMITES_DEFAUT = {"photo": 200 * 1024**2, "video": 1024**3, "duree": 0}
+
+    def limites(self):
+        """Taille maximale par photo et par vidéo (octets) et durée lue (s) pour ce compte."""
+        if getattr(self, "_limites", None):
+            return self._limites
+        lim = dict(self.LIMITES_DEFAUT)
+        try:
+            p = self.api.people.getLimits()["person"]
+            lim["photo"] = int(p["photos"]["maxupload"]) or lim["photo"]
+            lim["video"] = int(p["videos"]["maxupload"]) or lim["video"]
+            lim["duree"] = int(p["videos"].get("maxduration", 0) or 0)
+        except Exception:
+            pass
+        self._limites = lim
+        return lim
+
+    def trop_lourd(self, chemin):
+        p = Path(chemin)
+        lim = self.limites()
+        max_ = lim["video"] if p.suffix.lower() in VIDEOS else lim["photo"]
+        return p.stat().st_size > max_, max_
 
     def albums_existants(self):
         albums, page = [], 1
@@ -434,6 +468,12 @@ class Flickr:
                 progres({"type": "info", "msg": "Arrêté."})
                 break
             progres({"type": "photo", "i": i, "n": len(a_envoyer), "fichier": p.name})
+            lourd, max_ = self.trop_lourd(p)
+            if lourd:  # Flickr le refuserait : inutile de l'envoyer
+                echecs.append(p.name)
+                progres({"type": "erreur", "msg": f"{p.name} : trop lourd pour Flickr "
+                         f"({taille_lisible(p.stat().st_size)}, maximum {taille_lisible(max_)})"})
+                continue
             try:
                 pid = self._envoyer(p, title=titre, description=description, tags=tags,
                                     is_public=public, is_friend="0", is_family="0")

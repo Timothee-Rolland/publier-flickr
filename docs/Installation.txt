@@ -11,8 +11,13 @@ PUBLIER SUR FLICKR — installation
 3. Si macOS demande d'installer les « outils de développement en ligne de commande »,
    accepter (c'est ce qui fournit Python), puis relancer l'app.
 
-4. L'app installe ses composants (1 à 3 minutes, connexion internet nécessaire),
-   puis ouvre Flickr dans le navigateur : se connecter avec le compte Flickr du groupe
+4. L'app installe ses composants (1 à 3 minutes, connexion internet nécessaire).
+
+5. Elle demande ensuite la clé et le secret Flickr du groupe (à demander au
+   responsable du compte) : les coller puis « Vérifier et enregistrer ».
+   Ils restent uniquement sur ce Mac (modifiables ensuite via le bouton ⚙︎).
+
+6. Flickr s'ouvre dans le navigateur : se connecter avec le compte Flickr du groupe
    et cliquer sur « OK, I'll authorize it ». Ces étapes ne se font qu'une fois.
 
 Utilisation : glisser un dossier de photos dans la fenêtre. Un album par sous-dossier.

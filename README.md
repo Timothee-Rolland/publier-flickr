@@ -16,8 +16,12 @@ visibilité privée (par défaut) ou publique, ajout à un album existant, repri
 
 ## ⚠️ Clé Flickr : jamais dans ce dépôt
 
-La clé et le secret de l'application Flickr vont dans `config.ini`, **ignoré par git**.
-Ils sont intégrés uniquement dans le zip distribué en interne.
+L'app distribuée ne contient pas de clé : au premier lancement, elle affiche un écran de
+configuration où l'on colle la clé et le secret. Ils sont vérifiés auprès de Flickr puis
+enregistrés uniquement sur le Mac (`~/Library/Application Support/Publier sur Flickr/config.ini`,
+lisible par l'utilisateur seul). Le bouton ⚙︎ permet de les changer.
+
+Pour le développement, une copie locale `config.ini` est **ignorée par git**.
 
 À faire une fois après le clonage, pour que git bloque tout commit contenant une clé :
 
@@ -28,11 +32,11 @@ git config core.hooksPath scripts/hooks
 ## Construire l'app à distribuer
 
 ```bash
-cp config.exemple.ini config.ini     # puis y coller la clé et le secret
-scripts/construire_app.sh            # -> dist/Publier sur Flickr.zip
+scripts/construire_app.sh            # -> dist/Publier sur Flickr.zip, sans clé
 ```
 
-Le zip contient la clé : à partager en interne uniquement.
+Variante : `scripts/construire_app.sh config.ini` intègre la clé (plus besoin de la saisir),
+mais le zip doit alors rester strictement interne.
 
 ## Publier une mise à jour
 

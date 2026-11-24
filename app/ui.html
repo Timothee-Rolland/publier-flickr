@@ -51,8 +51,8 @@ button.lien{border:none;background:none;color:var(--accent);padding:0}
 .ligne{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .ligne label{font-size:12px;color:var(--doux);width:88px;flex:none}
 .ligne > input,.ligne > textarea{flex:1;min-width:180px}
-input[type=text],textarea{font:inherit;color:var(--texte);background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:7px 10px;outline:none}
-input[type=text]:focus,textarea:focus{border-color:var(--accent)}
+input[type=text],input[type=password],textarea{font:inherit;color:var(--texte);background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:7px 10px;outline:none}
+input[type=text]:focus,input[type=password]:focus,textarea:focus{border-color:var(--accent)}
 textarea{resize:vertical;min-height:34px;height:34px}
 input.titre{font-size:16px;font-weight:600}
 .meta{font-size:12px;color:var(--doux);margin:-4px 0 10px}
@@ -100,7 +100,8 @@ select.cible{font:inherit;flex:1;min-width:220px;max-width:520px;padding:6px 8px
   <div class="logo"><i></i><i></i></div>
   <h1>Publier sur Flickr</h1>
   <div class="compte"><span class="pastille" id="pastille"></span><span id="compte">Non connecté</span>
-    <button id="btnConnexion" style="display:none">Se connecter</button></div>
+    <button id="btnConnexion" style="display:none">Se connecter</button>
+    <button id="btnReglages" title="Réglages (clé Flickr)" style="padding:5px 9px">⚙︎</button></div>
 </header>
 <main id="main"></main>
 <footer id="pied" style="display:none">
@@ -191,17 +192,39 @@ function champTags(conteneur, liste, surChange){
 }
 
 /* ---------- écrans ---------- */
-function ecranCles(){
+function ecranCles(modification){
+  if(S.enCours) return toast("Publication en cours : attendez la fin");
   $("#pied").style.display="none";
-  $("#main").innerHTML = `<div class="bloc cle"><h3>Configuration</h3>
-    <p>Collez la clé et le secret de l'application Flickr du groupe.<br>
-    Pour en créer une : <button class="lien" id="lienApp">flickr.com/services/apps/create</button></p>
-    <input type="text" id="k" placeholder="Key"><input type="text" id="s" placeholder="Secret">
-    <button class="primaire" id="ok">Enregistrer</button></div>`;
-  $("#lienApp").onclick=()=>pywebview.api.ouvrir("https://www.flickr.com/services/apps/create/apply");
-  $("#ok").onclick=async()=>{ const k=$("#k").value.trim(), s=$("#s").value.trim();
-    if(!k||!s) return toast("Les deux champs sont nécessaires");
-    S.etat = await pywebview.api.enregistrer_cles(k,s); connexion(); ecranDepot(); };
+  $("#main").innerHTML = `<div class="bloc cle">
+    <h3>${modification?"Réglages — clé Flickr":"Bienvenue — configuration (une seule fois)"}</h3>
+    <p>L'app a besoin de la <b>clé</b> et du <b>secret</b> de l'application Flickr du groupe.
+      Demandez-les à la personne qui gère le compte, ou retrouvez-les sur
+      <button class="lien" id="lienCles">flickr.com → Vos applications</button>.</p>
+    <p style="font-size:12px">Ils sont enregistrés uniquement sur ce Mac et ne sont jamais partagés.</p>
+    <label class="case">Clé (Key)</label>
+    <input type="text" id="k" placeholder="ex. 9a8b7c6d…" value="${esc(S.etat?.cle||"")}" autocomplete="off" spellcheck="false">
+    <label class="case">Secret</label>
+    <div style="display:flex;gap:8px"><input type="password" id="s" placeholder="${modification?"Laisser vide pour ne pas changer… ou recoller le secret":"ex. 1a2b3c4d…"}" autocomplete="off" spellcheck="false" style="flex:1;margin-bottom:10px">
+      <button id="voir" style="margin-bottom:10px">Afficher</button></div>
+    <div class="statut err" id="errCles" style="margin:0 0 10px"></div>
+    <div style="display:flex;gap:10px">
+      <button class="primaire" id="ok">Vérifier et enregistrer</button>
+      ${modification?`<button id="annuler">Annuler</button>`:""}</div></div>`;
+  $("#lienCles").onclick=()=>pywebview.api.ouvrir("https://www.flickr.com/services/apps/by/me");
+  $("#voir").onclick=()=>{const s=$("#s"); s.type=s.type==="password"?"text":"password"; $("#voir").textContent=s.type==="password"?"Afficher":"Masquer"};
+  if(modification) $("#annuler").onclick=()=>S.analyse?rendreAlbums():ecranDepot();
+  $("#ok").onclick=async()=>{
+    const k=$("#k").value.trim(), s=$("#s").value.trim();
+    if(!k||(!s&&!modification)) return $("#errCles").textContent="La clé et le secret sont nécessaires.";
+    $("#ok").disabled=true; $("#ok").textContent="Vérification…"; $("#errCles").textContent="";
+    const r = await pywebview.api.enregistrer_cles(k,s);
+    $("#ok").disabled=false; $("#ok").textContent="Vérifier et enregistrer";
+    if(!r.ok) return $("#errCles").textContent=r.erreur;
+    S.etat=r.etat; S.moi=null; $("#pastille").classList.remove("on");
+    toast("Clé enregistrée. Autorisez maintenant l'accès dans le navigateur.");
+    ecranDepot(); connexion();
+  };
+  $(modification?"#s":"#k").focus();
 }
 function ecranDepot(){
   $("#pied").style.display="none"; S.analyse=null;
@@ -380,6 +403,7 @@ function surTags(t){
 function surAlbumsExistants(a){ S.albumsFlickr=a.map(x=>({id:String(x.id), titre:String(x.titre)})); if(S.analyse && !S.enCours) rendreListe(); }
 function surErreur(m){ toast(m) }
 $("#btnConnexion").onclick=connexion;
+$("#btnReglages").onclick=()=>ecranCles(true);
 
 /* survol visuel de la zone de dépôt (le dépôt lui-même est géré côté Python) */
 document.addEventListener("dragenter",()=>{const z=$("#zone");if(z)z.classList.add("survol")});

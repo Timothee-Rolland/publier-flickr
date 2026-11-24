@@ -1,12 +1,11 @@
 #!/bin/bash
 # Construit l'app à distribuer : dist/Publier sur Flickr.app + dist/Publier sur Flickr.zip
-# Usage : scripts/construire_app.sh [chemin/vers/config.ini]   (par défaut ./config.ini, jamais commité)
+#   scripts/construire_app.sh            -> sans clé : l'app la demande au premier lancement (recommandé)
+#   scripts/construire_app.sh config.ini -> clé intégrée : zip à garder strictement en interne
 set -e
 cd "$(dirname "$0")/.."
-CONFIG="${1:-config.ini}"
-if [ ! -f "$CONFIG" ] || grep -q COLLER "$CONFIG"; then
-  echo "✗ Il faut un config.ini contenant la clé Flickr (copier config.exemple.ini)."; exit 1
-fi
+CONFIG="${1:-config.exemple.ini}"
+[ -f "$CONFIG" ] || { echo "✗ Fichier introuvable : $CONFIG"; exit 1; }
 APP="dist/Publier sur Flickr.app"
 rm -rf dist && mkdir -p dist
 cp -R "mac/Publier sur Flickr.app" "$APP"
@@ -18,4 +17,8 @@ sed -i.bak "s#<string>[0-9.]*</string><!--v-->#<string>$V</string><!--v-->#g" "$
 chmod 755 "$APP/Contents/MacOS/lanceur"
 cp docs/Installation.txt dist/
 (cd dist && zip -qry "Publier sur Flickr.zip" "Publier sur Flickr.app" Installation.txt)
-echo "✓ dist/Publier sur Flickr.zip (version $V) — contient la clé : à partager en interne uniquement."
+if grep -q COLLER "$APP/Contents/Resources/config.ini"; then
+  echo "✓ dist/Publier sur Flickr.zip (version $V) — sans clé : demandée au premier lancement."
+else
+  echo "⚠ dist/Publier sur Flickr.zip (version $V) — CONTIENT LA CLÉ : à partager en interne uniquement."
+fi

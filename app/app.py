@@ -34,12 +34,19 @@ class Api:
         except OSError:
             version = ""
         return {"cles": core.cles_ok(cfg), "version": version,
+                "cle": cfg.get("flickr", "api_key", fallback="") if core.cles_ok(cfg) else "",
                 "tags_defaut": core.tags_par_defaut(cfg),
                 "public_defaut": core.public_par_defaut(cfg)}
 
     def enregistrer_cles(self, cle, secret):
+        if not secret.strip():  # modification : secret inchangé
+            secret = core.lire_config().get("flickr", "api_secret", fallback="")
+        erreur = core.tester_cle(cle, secret)
+        if erreur:
+            return {"ok": False, "erreur": erreur}
         core.enregistrer_cles(cle, secret)
-        return self.etat()
+        self._flickr = None
+        return {"ok": True, "etat": self.etat()}
 
     def connecter(self):
         def tache():

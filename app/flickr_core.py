@@ -30,6 +30,19 @@ def cles_ok(cfg):
     return bool(cle and sec and "COLLER" not in cle and "COLLER" not in sec)
 
 
+def tester_cle(cle, secret):
+    """Vérifie la clé auprès de Flickr (le secret, lui, est vérifié à la connexion)."""
+    try:
+        flickrapi.FlickrAPI(cle.strip(), secret.strip(), format="parsed-json",
+                            store_token=False).reflection.getMethods()
+        return None
+    except flickrapi.exceptions.FlickrError as e:
+        return "Clé refusée par Flickr. Vérifiez qu'elle est copiée en entier." \
+            if "100" in str(e) or "key" in str(e).lower() else f"Flickr : {e}"
+    except Exception as e:
+        return f"Flickr injoignable ({e}). Vérifiez la connexion internet."
+
+
 def enregistrer_cles(cle, secret):
     cfg = lire_config()
     if not cfg.has_section("flickr"):
@@ -38,6 +51,7 @@ def enregistrer_cles(cle, secret):
     cfg.set("flickr", "api_secret", secret.strip())
     with open(CONFIG, "w", encoding="utf-8") as f:
         cfg.write(f)
+    CONFIG.chmod(0o600)  # lisible par l'utilisateur seulement
 
 
 def tags_par_defaut(cfg):

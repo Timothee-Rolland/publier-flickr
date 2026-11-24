@@ -2,6 +2,8 @@
 import base64
 import hashlib
 import json
+import os
+import plistlib
 import shutil
 import subprocess
 import sys
@@ -19,11 +21,111 @@ import flickr_core as core
 ICI = Path(__file__).resolve().parent
 
 
+PROTEGES = {"Desktop": "Bureau", "Documents": "Documents", "Downloads": "Téléchargements",
+            "Pictures": "Images", "Movies": "Vidéos", "Music": "Musique"}
+AGENT = Path.home() / "Library" / "LaunchAgents" / "fr.epy.publier-flickr.plist"
+
+
+def chemin_lisible(p):
+    p = Path(p)
+    try:
+        rel = p.relative_to(Path.home())
+    except ValueError:
+        return str(p)
+    parts = list(rel.parts)
+    if parts and parts[0] in PROTEGES:
+        parts[0] = PROTEGES[parts[0]]
+    return "~/" + "/".join(parts) if parts else "~"
+
+
+def acces_dossier(p):
+    """'ok', 'absent' ou 'bloque' (protection macOS des dossiers Bureau, Documents…)."""
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+        list(os.scandir(p))
+        (p / core.SOUS_DOSSIER_PUBLIES).mkdir(exist_ok=True)
+        return "ok"
+    except PermissionError:
+        return "bloque"
+    except OSError:
+        return "absent"
+
+
+def chemin_app():
+    """Chemin de l'app (.app) : fourni par le lanceur, sinon retrouvé par Spotlight."""
+    if os.environ.get("PF_APP"):
+        return os.environ["PF_APP"]
+    for c in ("/Applications/Publier sur Flickr.app",
+              str(Path.home() / "Applications" / "Publier sur Flickr.app")):
+        if Path(c).exists():
+            return c
+    try:
+        r = subprocess.run(["mdfind", "kMDItemCFBundleIdentifier == 'fr.epy.publier-flickr'"],
+                           capture_output=True, text=True, timeout=5)
+        for ligne in r.stdout.splitlines():
+            if ligne.endswith(".app"):
+                return ligne
+    except Exception:
+        pass
+    return None
+
+
+class Surveillant(threading.Thread):
+    """Surveille le dossier choisi : chaque sous-dossier qui contient des photos/vidéos et dont
+    la copie est terminée (rien n'a bougé depuis ~10 s) est proposé à l'import."""
+    def __init__(self, api):
+        super().__init__(daemon=True)
+        self.api = api
+        self.etats = {}       # chemin -> signature au passage précédent
+        self.signales = set()
+        self.reveil = threading.Event()
+
+    def run(self):
+        while True:
+            try:
+                self.tour()
+            except Exception:
+                traceback.print_exc()
+            self.reveil.wait(5)
+            self.reveil.clear()
+
+    def tour(self):
+        racine = core.dossier_surveille()
+        acces = acces_dossier(racine)
+        prets, en_copie = [], []
+        if acces == "ok":
+            for d in sorted(racine.iterdir(), key=lambda x: x.name.lower()):
+                if not d.is_dir() or d.name.startswith(".") or d.name == core.SOUS_DOSSIER_PUBLIES:
+                    continue
+                try:
+                    sig = core.signature(d)
+                except OSError:
+                    continue
+                if sig[0] == 0:
+                    continue
+                stable = self.etats.get(str(d)) == sig and time.time() - sig[2] > 10
+                self.etats[str(d)] = sig
+                if not stable:
+                    en_copie.append({"nom": d.name, "nb": sig[0]})
+                elif not core.publie_entierement(d):
+                    prets.append({"chemin": str(d), "nom": d.name, "nb": sig[0],
+                                  "taille": sig[1], "nouveau": str(d) not in self.signales})
+        nouveaux = [x for x in prets if x["nouveau"]]
+        self.signales |= {x["chemin"] for x in prets}
+        self.api._sur_surveillance({"dossier": str(racine), "lisible": chemin_lisible(racine),
+                                    "acces": acces, "prets": prets, "en_copie": en_copie,
+                                    "nouveaux": [x["nom"] for x in nouveaux]})
+
+
 class Api:
     def __init__(self):
         self._fenetre = None
         self._flickr = None
         self._arret = False
+        self._surveillant = None
+        self._barre = None
+        self._quitter = False
+        self._attente = 0
 
     # ------------------------------------------------ outils
     def _js(self, fonction, donnees):
@@ -97,6 +199,79 @@ class Api:
     def arreter(self):
         self._arret = True
 
+    # ------------------------------------------------ dossier surveillé
+    def _sur_surveillance(self, etat):
+        self._attente = len(etat["prets"])
+        badge_et_barre(self, self._attente, bool(etat["nouveaux"]))
+        self._js("surSurveillance", etat)
+
+    def rafraichir_surveillance(self):
+        if self._surveillant:
+            self._surveillant.reveil.set()
+
+    def reglages(self):
+        d = core.dossier_surveille()
+        return {"dossier": str(d), "lisible": chemin_lisible(d), "acces": acces_dossier(d),
+                "demarrage": AGENT.exists(), "app": chemin_app() is not None}
+
+    def choisir_dossier_surveille(self):
+        """Choix du dossier ; passer par ce sélecteur vaut aussi autorisation macOS pour la session."""
+        actuel = core.dossier_surveille()
+        res = self._fenetre.create_file_dialog(webview.FileDialog.FOLDER,
+                                               directory=str(actuel.parent if actuel.parent.exists() else Path.home()))
+        if res:
+            choix = Path(res[0] if isinstance(res, (list, tuple)) else res)
+            core.enregistrer_reglage("surveillance", "dossier", str(choix))
+            self.rafraichir_surveillance()
+        return self.reglages()
+
+    def autoriser_session(self):
+        """Ouvre le sélecteur sur le dossier surveillé : le valider débloque l'accès jusqu'à la fermeture."""
+        d = core.dossier_surveille()
+        res = self._fenetre.create_file_dialog(webview.FileDialog.FOLDER, directory=str(d.parent))
+        if res:
+            choix = Path(res[0] if isinstance(res, (list, tuple)) else res)
+            if choix != d:
+                core.enregistrer_reglage("surveillance", "dossier", str(choix))
+            self.rafraichir_surveillance()
+        return self.reglages()
+
+    def ouvrir_reglages_acces(self):
+        subprocess.run(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"])
+        app = chemin_app()
+        if app:  # montre l'app dans le Finder pour la glisser dans la liste
+            subprocess.run(["open", "-R", app])
+
+    def ouvrir_dossier_surveille(self):
+        d = core.dossier_surveille()
+        if acces_dossier(d) != "absent":
+            subprocess.run(["open", str(d)])
+
+    def definir_demarrage(self, actif):
+        app = chemin_app()
+        if actif and app:
+            AGENT.parent.mkdir(parents=True, exist_ok=True)
+            with open(AGENT, "wb") as f:
+                plistlib.dump({"Label": "fr.epy.publier-flickr",
+                               "ProgramArguments": [str(Path(app) / "Contents" / "MacOS" / "lanceur")],
+                               "EnvironmentVariables": {"PF_DISCRET": "1", "PF_APP": app},
+                               "RunAtLoad": True, "LimitLoadToSessionType": "Aqua"}, f)
+        elif AGENT.exists():
+            AGENT.unlink()
+        core.enregistrer_reglage("surveillance", "demarrage", "1" if actif and app else "0")
+        return self.reglages()
+
+    # ------------------------------------------------ fenêtre
+    def montrer(self):
+        if self._fenetre:
+            self._fenetre.show()
+            appel_principal(lambda: activer_app())
+
+    def quitter(self):
+        self._quitter = True
+        if self._fenetre:
+            self._fenetre.destroy()
+
     def chercher_communes(self, texte):
         return core.chercher_communes(texte)
 
@@ -132,13 +307,37 @@ class Api:
                 self._publier(albums, bilan)
             finally:
                 core.deverrouiller(verrous)
-            self._js("surTermine", bilan)
+            nouvelle = self._ranger(racine, bilan, len(albums))
+            self._js("surTermine", {"bilan": bilan, "racine": nouvelle})
+            self.rafraichir_surveillance()
             try:
                 self._js("surTags", self._flickr.tags_existants())
                 self._js("surAlbumsExistants", self._flickr.albums_existants())
             except Exception:
                 pass
         threading.Thread(target=tache, daemon=True).start()
+
+    def _ranger(self, racine, bilan, n):
+        """Dossier venant du dossier surveillé et entièrement publié -> rangé dans « Publiés »."""
+        if not racine:
+            return None
+        r = Path(racine)
+        surveille = core.dossier_surveille()
+        if r.parent != surveille or len(bilan) != n or any(b.get("echecs") for b in bilan):
+            return None
+        if not core.publie_entierement(r):
+            return None
+        dest = surveille / core.SOUS_DOSSIER_PUBLIES / r.name
+        k = 2
+        while dest.exists():
+            dest = surveille / core.SOUS_DOSSIER_PUBLIES / f"{r.name} ({k})"
+            k += 1
+        try:
+            shutil.move(str(r), str(dest))
+            return str(dest)
+        except OSError:
+            traceback.print_exc()
+            return None
 
     def _publier(self, albums, bilan):
             for idx, album in enumerate(albums):
@@ -245,9 +444,109 @@ def identite_macos():
         print("identité macOS :", e, flush=True)
 
 
-def brancher_depot(fenetre, api):
+def appel_principal(f):
+    """Exécute f sur le fil principal (obligatoire pour AppKit)."""
+    try:
+        from PyObjCTools import AppHelper
+        AppHelper.callAfter(f)
+    except Exception:
+        pass
+
+
+def activer_app():
+    try:
+        from AppKit import NSApplication
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+    except Exception:
+        pass
+
+
+def badge_et_barre(api, n, signaler):
+    def maj():
+        try:
+            from AppKit import NSApplication
+            appli = NSApplication.sharedApplication()
+            appli.dockTile().setBadgeLabel_(str(n) if n else "")
+            if signaler:
+                appli.requestUserAttention_(10)  # le Dock rebondit une fois
+            if api._barre:
+                api._barre.mettre_a_jour(n)
+        except Exception:
+            pass
+    appel_principal(maj)
+
+
+def creer_barre_menus(api):
+    """Icône dans la barre des menus : l'app continue de surveiller fenêtre fermée."""
+    try:
+        import objc
+        from AppKit import NSStatusBar, NSMenu, NSMenuItem, NSImage, NSVariableStatusItemLength
+        from Foundation import NSObject, NSMakeSize
+
+        class Barre(NSObject):
+            def initAvecApi_(self, a):
+                self = objc.super(Barre, self).init()
+                self.api = a
+                self.item = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
+                img = NSImage.alloc().initWithContentsOfFile_(str(ICI / "icone.png"))
+                if img is not None:
+                    img.setSize_(NSMakeSize(18, 18))
+                    self.item.button().setImage_(img)
+                menu = NSMenu.alloc().init()
+                self.info = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Aucun album en attente", None, "")
+                menu.addItem_(self.info)
+                menu.addItem_(NSMenuItem.separatorItem())
+                for titre, action in (("Ouvrir Publier sur Flickr", "ouvrir:"),
+                                      ("Ouvrir le dossier surveillé", "dossier:"),
+                                      ("Quitter", "quitter:")):
+                    it = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(titre, action, "")
+                    it.setTarget_(self)
+                    menu.addItem_(it)
+                self.item.setMenu_(menu)
+                return self
+
+            def mettre_a_jour(self, n):
+                self.item.button().setTitle_(f" {n}" if n else "")
+                self.info.setTitle_(f"{n} album{'s' if n > 1 else ''} en attente" if n else "Aucun album en attente")
+
+            def ouvrir_(self, _):
+                self.api.montrer()
+
+            def dossier_(self, _):
+                self.api.ouvrir_dossier_surveille()
+
+            def quitter_(self, _):
+                self.api.quitter()
+
+        api._barre = Barre.alloc().initAvecApi_(api)
+    except Exception as e:
+        print("barre des menus :", e, flush=True)
+    try:  # clic sur l'icône du Dock quand la fenêtre est masquée : on la réaffiche
+        import objc
+        from webview.platforms.cocoa import BrowserView
+
+        class Reouverture(objc.Category(BrowserView.AppDelegate)):
+            def applicationShouldHandleReopen_hasVisibleWindows_(self, app, visibles):
+                api.montrer()
+                return True
+    except Exception as e:
+        print("réouverture Dock :", e, flush=True)
+
+
+def au_demarrage(fenetre, api):
     fenetre.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
     fenetre.dom.document.events.drop += DOMEventHandler(api.sur_depot, True, True)
+    appel_principal(lambda: creer_barre_menus(api))
+    api._surveillant = Surveillant(api)
+    api._surveillant.start()
+
+
+def sur_fermeture(fenetre, api):
+    """Fermer la fenêtre la masque : la surveillance continue (Quitter : Cmd+Q ou barre des menus)."""
+    if api._quitter or api._barre is None:
+        return True
+    threading.Timer(0.05, fenetre.hide).start()
+    return False
 
 
 def main():
@@ -255,11 +554,13 @@ def main():
     core.deverrouiller()  # au cas où un envoi précédent aurait été interrompu brutalement
     threading.Thread(target=nettoyer_cache, daemon=True).start()
     api = Api()
+    discret = os.environ.get("PF_DISCRET") == "1" or "--discret" in sys.argv
     fenetre = webview.create_window(
         "Publier sur Flickr", url=str(ICI / "ui.html"), js_api=api,
-        width=1040, height=760, min_size=(820, 560))
+        width=1040, height=760, min_size=(820, 560), hidden=discret)
     api._fenetre = fenetre
-    webview.start(brancher_depot, (fenetre, api))
+    fenetre.events.closing += lambda: sur_fermeture(fenetre, api)
+    webview.start(au_demarrage, (fenetre, api))
 
 
 if __name__ == "__main__":

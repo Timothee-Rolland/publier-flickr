@@ -104,4 +104,5 @@ if [ ! -f "$SUP/app.py" ]; then
   exit 1
 fi
 export SSL_CERT_FILE="$("$PY" -c 'import certifi; print(certifi.where())' 2>/dev/null)"
-cd "$SUP" && exec "$PY" "$SUP/app.py" >>"$JOURNAL" 2>&1
+export PF_APP="$(cd "$(dirname "$0")/../.." && pwd)"   # chemin de l'app (démarrage auto)
+cd "$SUP" && exec "$PY" "$SUP/app.py" "$@" >>"$JOURNAL" 2>&1

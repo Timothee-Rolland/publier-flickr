@@ -68,6 +68,57 @@ def public_par_defaut(cfg):
     return cfg.get("defaut", "public", fallback="0").strip() == "1"
 
 
+# ---------------------------------------------------------------- dossier surveillé
+DOSSIER_SURVEILLE_DEFAUT = "~/À publier sur Flickr"
+SOUS_DOSSIER_PUBLIES = "Publiés"
+
+
+def enregistrer_reglage(section, cle, valeur):
+    cfg = lire_config()
+    if not cfg.has_section(section):
+        cfg.add_section(section)
+    cfg.set(section, cle, str(valeur))
+    with open(CONFIG, "w", encoding="utf-8") as f:
+        cfg.write(f)
+    CONFIG.chmod(0o600)
+
+
+def dossier_surveille(cfg=None):
+    cfg = cfg or lire_config()
+    return Path(cfg.get("surveillance", "dossier", fallback=DOSSIER_SURVEILLE_DEFAUT)).expanduser()
+
+
+def demarrage_auto(cfg=None):
+    cfg = cfg or lire_config()
+    return cfg.get("surveillance", "demarrage", fallback="0").strip() == "1"
+
+
+def signature(dossier):
+    """(nombre de fichiers, taille totale, dernière modification) des médias du dossier."""
+    n = taille = 0
+    recent = 0.0
+    for f in dossier.rglob("*"):
+        if any(part.startswith(".") for part in f.relative_to(dossier).parts):
+            continue
+        if f.is_file() and f.suffix.lower() in EXTENSIONS:
+            st = f.stat()
+            n += 1
+            taille += st.st_size
+            recent = max(recent, st.st_mtime)
+    return n, taille, recent
+
+
+def publie_entierement(dossier):
+    """Vrai si tous les médias de tous les albums du dossier sont déjà sur Flickr."""
+    for d in [dossier] + [x for x in dossier.rglob("*") if x.is_dir()]:
+        ph = photos_de(d)
+        if ph:
+            deja = lire_suivi(d).get("photos", {})
+            if any(p.name not in deja for p in ph):
+                return False
+    return True
+
+
 # ---------------------------------------------------------------- tags
 def normaliser(tag):
     """Forme « propre » comme Flickr : minuscules, sans espaces ni ponctuation."""

@@ -33,7 +33,8 @@ button:hover{border-color:var(--doux)}
 button.primaire{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 button.primaire:disabled{opacity:.45;cursor:default}
 button.lien{border:none;background:none;color:var(--accent);padding:0}
-.depot{border:2px dashed var(--bord);border-radius:18px;height:100%;min-height:360px;display:flex;flex-direction:column;
+.accueil{display:flex;flex-direction:column;gap:16px;height:100%}
+.depot{border:2px dashed var(--bord);border-radius:18px;flex:1;min-height:300px;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:14px;color:var(--doux);text-align:center;transition:.15s}
 .depot.survol{border-color:var(--accent);background:var(--accent-doux);color:var(--accent)}
 .depot .grand{font-size:20px;font-weight:600;color:var(--texte)}
@@ -75,6 +76,21 @@ button.lien{border:none;background:none;color:var(--accent);padding:0}
 .tuile .badge.ok{background:var(--ok)}
 .tuile .badge + .badge{top:28px}
 .g-aide{font-size:12px;color:var(--doux);padding:0 22px 12px}
+.surv{background:var(--carte);border:1px solid var(--bord);border-radius:var(--rayon);padding:14px 18px}
+.surv-tete{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.surv-tete .t{flex:1;font-size:13px}
+.surv-tete code{font:12px ui-monospace,Menlo,monospace;background:var(--bg);padding:2px 6px;border-radius:5px}
+.attente{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--bord)}
+.attente:first-of-type{margin-top:10px}
+.attente .n{flex:1} .attente .n small{color:var(--doux)}
+.bloque{margin-top:10px;background:#fdecea;color:var(--erreur);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5}
+@media (prefers-color-scheme: dark){.bloque{background:#3d1f1c}}
+.bloque ol{margin:6px 0 8px 18px;padding:0}
+.bloque .actions{display:flex;gap:8px;flex-wrap:wrap}
+.banniere{position:sticky;top:-22px;z-index:20;margin:-22px -22px 16px;padding:10px 22px;background:var(--accent);color:#fff;
+  display:flex;align-items:center;gap:12px;font-size:13px}
+.banniere span{flex:1}
+.banniere button{background:rgba(255,255,255,.2);color:#fff;border-color:transparent}
 .aide{font-size:12px;color:var(--doux);margin:-6px 0 10px 98px;line-height:1.4}
 .aide.haut{margin:8px 0 0 0}
 .aide b{color:var(--texte);font-weight:600}
@@ -244,6 +260,22 @@ function champTags(conteneur, liste, surChange){
 }
 
 /* ---------- écrans ---------- */
+async function rendreReglagesSurv(r){
+  r = r || await pywebview.api.reglages();
+  const z=$("#reglagesSurv"); if(!z) return;
+  z.innerHTML=`<h3>Dossier surveillé</h3>
+    <p>Les dossiers de photos déposés ici sont détectés automatiquement et proposés à l'import.</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <code style="flex:1;font:12px ui-monospace,Menlo,monospace;background:var(--bg);padding:7px 9px;border-radius:7px">${esc(r.lisible)}</code>
+      <button id="rsChoisir">Choisir…</button><button id="rsOuvrir">Ouvrir</button></div>
+    ${r.acces==="bloque"?`<div class="bloque">macOS bloque l'accès à ce dossier : voir l'écran d'accueil pour l'autoriser, ou choisissez un dossier hors Bureau/Documents/Téléchargements/Images.</div>`:""}
+    <label class="case" style="font-size:13px;color:var(--texte);margin-top:10px">
+      <input type="checkbox" id="rsDemarrage" ${r.demarrage?"checked":""} ${r.app?"":"disabled"}>
+      Ouvrir au démarrage du Mac, en arrière-plan (l'icône reste dans la barre des menus)</label>`;
+  $("#rsChoisir").onclick=async()=>rendreReglagesSurv(await pywebview.api.choisir_dossier_surveille());
+  $("#rsOuvrir").onclick=()=>pywebview.api.ouvrir_dossier_surveille();
+  $("#rsDemarrage").onchange=async e=>rendreReglagesSurv(await pywebview.api.definir_demarrage(e.target.checked));
+}
 function ecranCles(modification){
   if(S.enCours) return toast("Publication en cours : attendez la fin");
   $("#pied").style.display="none";
@@ -261,7 +293,9 @@ function ecranCles(modification){
     <div class="statut err" id="errCles" style="margin:0 0 10px"></div>
     <div style="display:flex;gap:10px">
       <button class="primaire" id="ok">Vérifier et enregistrer</button>
-      ${modification?`<button id="annuler">Annuler</button>`:""}</div></div>`;
+      ${modification?`<button id="annuler">Annuler</button>`:""}</div></div>
+    ${modification?`<div class="bloc cle" id="reglagesSurv"><h3>Dossier surveillé</h3><p>Chargement…</p></div>`:""}`;
+  if(modification) rendreReglagesSurv();
   $("#lienCles").onclick=()=>pywebview.api.ouvrir("https://www.flickr.com/services/apps/by/me");
   $("#voir").onclick=()=>{const s=$("#s"); s.type=s.type==="password"?"text":"password"; $("#voir").textContent=s.type==="password"?"Afficher":"Masquer"};
   if(modification) $("#annuler").onclick=()=>S.analyse?rendreAlbums():ecranDepot();
@@ -280,12 +314,59 @@ function ecranCles(modification){
 }
 function ecranDepot(){
   $("#pied").style.display="none"; S.analyse=null;
-  $("#main").innerHTML = `<div class="depot" id="zone">
+  $("#main").innerHTML = `<div class="accueil"><div class="depot" id="zone">
     <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3-3 3 3"/></svg>
     <div class="grand">Déposez un dossier de photos ici</div>
     <div>Un album est créé pour le dossier et pour chacun de ses sous-dossiers contenant des photos.</div>
-    <button id="choisir">Choisir un dossier…</button></div>`;
+    <button id="choisir">Choisir un dossier…</button></div>
+    <div class="surv" id="surv"></div></div>`;
   $("#choisir").onclick=async()=>{const r=await pywebview.api.choisir_dossier(); if(r) surAnalyse(r)};
+  rendreSurveillance();
+}
+/* ---------- dossier surveillé ---------- */
+function rendreSurveillance(){
+  const z=$("#surv"); if(!z) return;
+  const v=S.surv;
+  if(!v){ z.innerHTML=`<div class="surv-tete"><span class="t">Dossier surveillé : vérification…</span></div>`; return; }
+  let corps="";
+  if(v.acces==="bloque"){
+    corps=`<div class="bloque"><b>macOS bloque l'accès à ce dossier.</b> Pour l'autoriser :
+      <div class="actions" style="margin-top:8px"><button data-s="session">Autoriser pour cette session</button>
+        <button data-s="definitif">Autoriser définitivement…</button><button data-s="changer">Choisir un autre dossier…</button></div>
+      <ol style="margin-top:10px"><li><b>Pour cette session</b> : dans la fenêtre qui s'ouvre, sélectionnez le dossier et cliquez « Choisir ».</li>
+      <li><b>Définitivement</b> : dans Réglages Système → Confidentialité et sécurité → <b>Accès complet au disque</b>,
+        cliquez « + » et ajoutez <b>Publier sur Flickr</b> (le Finder l'affiche), activez-le, puis relancez l'app.</li></ol></div>`;
+  } else if(v.prets.length || v.en_copie.length){
+    corps=v.prets.map(x=>`<div class="attente"><span class="n">📥 <b>${esc(x.nom)}</b> <small>· ${x.nb} fichier${x.nb>1?"s":""} · ${taille(x.taille)}</small></span>
+        <button class="primaire" data-p="${esc(x.chemin)}">Préparer l'album</button></div>`).join("")+
+      v.en_copie.map(x=>`<div class="attente"><span class="n">⏳ ${esc(x.nom)} <small>· copie en cours (${x.nb} fichiers)…</small></span></div>`).join("");
+  } else {
+    corps=`<div style="font-size:12px;color:var(--doux);margin-top:6px">Déposez-y un dossier de photos : il apparaîtra ici dès la fin de la copie. Les albums publiés sont rangés dans « Publiés ».</div>`;
+  }
+  z.innerHTML=`<div class="surv-tete"><span class="t">Dossier surveillé : <code>${esc(v.lisible)}</code></span>
+      <button data-s="ouvrir">Ouvrir dans le Finder</button><button data-s="changer">Changer…</button></div>${corps}`;
+  z.querySelectorAll("[data-p]").forEach(b=>b.onclick=async()=>{ b.disabled=true; b.textContent="Analyse…";
+    surAnalyse(await pywebview.api.analyser(b.dataset.p)); });
+  z.querySelectorAll("[data-s]").forEach(b=>b.onclick=async()=>{
+    const a=b.dataset.s;
+    if(a==="ouvrir") pywebview.api.ouvrir_dossier_surveille();
+    if(a==="changer"){ await pywebview.api.choisir_dossier_surveille(); }
+    if(a==="session"){ await pywebview.api.autoriser_session(); }
+    if(a==="definitif"){ pywebview.api.ouvrir_reglages_acces(); }
+  });
+}
+function surSurveillance(v){
+  S.surv=v;
+  rendreSurveillance();
+  // nouvel album détecté pendant qu'on travaille sur autre chose : bannière
+  if(v.nouveaux.length && S.analyse && !$(".banniere")){
+    const b=document.createElement("div"); b.className="banniere";
+    b.innerHTML=`<span>📥 Nouveau dans le dossier surveillé : <b>${v.nouveaux.map(esc).join(", ")}</b></span>
+      <button data-b="voir">Voir</button><button data-b="x">✕</button>`;
+    b.querySelector('[data-b="x"]').onclick=()=>b.remove();
+    b.querySelector('[data-b="voir"]').onclick=()=>{ if(S.enCours) return toast("Publication en cours : attendez la fin"); b.remove(); S.termine=false; ecranDepot(); };
+    $("#main").prepend(b);
+  }
 }
 function surAnalyse(r){
   if(S.enCours) return toast("Publication en cours : attendez la fin");
@@ -632,15 +713,17 @@ function surProgres(ev){
     const b=st.querySelector("[data-u]"); if(b) b.onclick=()=>pywebview.api.ouvrir(b.dataset.u);
   }
 }
-async function surTermine(bilan){
+async function surTermine(res){
+  const bilan=res.bilan;
   S.enCours=false; $("#btnArret").style.display="none"; $("#btnArret").textContent="Arrêter";
   const n=bilan.reduce((s,b)=>s+b.envoyees,0), e=bilan.reduce((s,b)=>s+b.echecs.length,0);
   toast(`Terminé : ${n} fichier${n>1?"s":""} envoyé${n>1?"s":""}`+(e?`, ${e} échec(s)`:""));
   S.termine = !e && bilan.length===file.length;   // tout est passé : on propose un nouvel import
+  if(res.racine){ S.analyse.racine=res.racine; toast("Publié et rangé dans « Publiés » du dossier surveillé"); }
   // ré-analyse pour refléter l'état en ligne, en gardant les saisies
   const saisies = S.albums; const r = await pywebview.api.analyser(S.analyse.racine);
   S.analyse=r;
-  S.albums = r.albums.map(a=>{const p=saisies.find(x=>x.chemin===a.chemin)||{};
+  S.albums = r.albums.map(a=>{const p=saisies.find(x=>x.relatif===a.relatif)||{};
     return {...a, inclus:p.inclus??true, tags:p.tags??[...a.tags], titre:p.titre??a.titre, date:p.date??a.date,
       description:p.description??a.description, commune:p.commune===undefined?a.commune:p.commune,
       public:p.public??S.etat.public_defaut, cible:null, exclus:p.exclus??new Set()}});

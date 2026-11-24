@@ -1,13 +1,14 @@
 PUBLIER SUR FLICKR — installation
 
-1. Télécharger le zip :
-   https://github.com/Timothee-Rolland/publier-flickr/releases/latest/download/Publier-sur-Flickr.zip
-   puis double-cliquer dessus pour le décompresser.
+1. Télécharger :
+   https://github.com/Timothee-Rolland/publier-flickr/releases/latest/download/Publier-sur-Flickr.dmg
 
-2. (Conseillé) Glisser « Publier sur Flickr » dans le dossier Applications,
-   puis dans le Dock pour l'avoir sous la main.
+2. Ouvrir le fichier téléchargé : une fenêtre s'affiche.
+   Glisser l'icône « Publier sur Flickr » sur le dossier « Applications ».
+   (On peut ensuite éjecter le disque « Publier sur Flickr » et supprimer le .dmg.)
 
-3. Double-cliquer sur l'app. Rien à installer : tout est inclus.
+3. Ouvrir l'app depuis Applications (ou Launchpad). Rien d'autre à installer : tout est inclus.
+   Astuce : la glisser dans le Dock pour l'avoir sous la main.
 
    La toute première fois seulement, macOS bloque l'ouverture
    (« Apple ne peut pas vérifier… ») :

@@ -1,7 +1,10 @@
-# Construit l'app autonome (Python embarqué) et l'attache à chaque release GitHub.
-# Lien de téléchargement stable :
+# Construit l'app autonome (Python embarqué) et l'attache à chaque release GitHub :
+#   - Publier-sur-Flickr.dmg : image disque « glisser l'app dans Applications » (recommandé)
+#   - Publier-sur-Flickr.zip : même app, en zip
+# Liens stables :
+#   https://github.com/Timothee-Rolland/publier-flickr/releases/latest/download/Publier-sur-Flickr.dmg
 #   https://github.com/Timothee-Rolland/publier-flickr/releases/latest/download/Publier-sur-Flickr.zip
-name: Zip autonome
+name: App autonome (dmg + zip)
 on:
   release:
     types: [published]
@@ -9,19 +12,25 @@ on:
 permissions:
   contents: write
 jobs:
-  zip:
-    runs-on: ubuntu-latest
+  construire:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install uv
+      - run: python3 -m pip install uv
       - run: scripts/construire_zip_autonome.sh
       - name: Contrôle des secrets
+        run: grep -q COLLER "dist/Publier sur Flickr.app/Contents/Resources/config.ini"
+      - run: scripts/construire_dmg.sh
+      - name: Vérification du dmg
         run: |
-          unzip -q "dist/Publier sur Flickr.zip" -d /tmp/verif
-          grep -q COLLER "/tmp/verif/Publier sur Flickr.app/Contents/Resources/config.ini"
+          hdiutil attach -nobrowse -readonly -mountpoint /tmp/vol dist/Publier-sur-Flickr.dmg
+          ls -la /tmp/vol
+          test -x "/tmp/vol/Publier sur Flickr.app/Contents/MacOS/lanceur"
+          test -L /tmp/vol/Applications
+          hdiutil detach /tmp/vol
       - name: Attacher à la release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -29,4 +38,4 @@ jobs:
           TAG="${{ github.event.release.tag_name }}"
           [ -n "$TAG" ] || TAG="$(gh release view --json tagName -q .tagName)"
           mv "dist/Publier sur Flickr.zip" dist/Publier-sur-Flickr.zip
-          gh release upload "$TAG" dist/Publier-sur-Flickr.zip --clobber
+          gh release upload "$TAG" dist/Publier-sur-Flickr.dmg dist/Publier-sur-Flickr.zip --clobber

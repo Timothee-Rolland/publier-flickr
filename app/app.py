@@ -138,12 +138,28 @@ class Api:
         return "data:image/jpeg;base64," + base64.b64encode(data).decode()
 
 
+def identite_macos():
+    """Nom et icône de l'app dans le Dock et la barre de menus (sinon : « Python »)."""
+    try:
+        from AppKit import NSApplication, NSImage
+        from Foundation import NSBundle
+        info = NSBundle.mainBundle().infoDictionary()
+        if info is not None:
+            info["CFBundleName"] = "Publier sur Flickr"
+        image = NSImage.alloc().initWithContentsOfFile_(str(ICI / "icone.png"))
+        if image is not None:
+            NSApplication.sharedApplication().setApplicationIconImage_(image)
+    except Exception as e:  # hors macOS ou PyObjC indisponible : sans conséquence
+        print("identité macOS :", e, flush=True)
+
+
 def brancher_depot(fenetre, api):
     fenetre.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
     fenetre.dom.document.events.drop += DOMEventHandler(api.sur_depot, True, True)
 
 
 def main():
+    identite_macos()
     api = Api()
     fenetre = webview.create_window(
         "Publier sur Flickr", url=str(ICI / "ui.html"), js_api=api,

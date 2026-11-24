@@ -20,9 +20,7 @@ body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Ne
 input,textarea{-webkit-user-select:text;user-select:text}
 header{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--bord);background:var(--carte)}
 header h1{font-size:16px;margin:0;font-weight:600;flex:1}
-.logo{width:26px;height:26px;display:flex;gap:3px;align-items:center}
-.logo i{width:10px;height:10px;border-radius:50%;background:var(--accent)}
-.logo i+i{background:#e5487b}
+.logo{width:30px;height:30px}
 .compte{font-size:13px;color:var(--doux);display:flex;align-items:center;gap:8px}
 .pastille{width:8px;height:8px;border-radius:50%;background:var(--doux)}
 .pastille.on{background:var(--ok)}
@@ -97,7 +95,7 @@ select.cible{font:inherit;flex:1;min-width:220px;max-width:520px;padding:6px 8px
 </head>
 <body>
 <header>
-  <div class="logo"><i></i><i></i></div>
+  <img class="logo" src="icone.png" alt="">
   <h1>Publier sur Flickr</h1>
   <div class="compte"><span class="pastille" id="pastille"></span><span id="compte">Non connecté</span>
     <button id="btnConnexion" style="display:none">Se connecter</button>

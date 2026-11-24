@@ -5,6 +5,17 @@ glisser-déposer d'un dossier, **un album par sous-dossier**, titre, description
 (localisation), **tags avec suggestion des tags déjà utilisés sur le compte**,
 visibilité privée (par défaut) ou publique, ajout à un album existant, reprise après interruption.
 
+## Installation (une ligne dans le Terminal)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Timothee-Rolland/publier-flickr/main/installer.sh | bash
+```
+
+Installe l'app dans Applications, ajoute son icône au Dock, installe Python et les
+composants (sans les outils de développement Apple), puis l'ouvre. Pas d'avertissement
+« développeur non identifié ». Relancer la commande réinstalle l'app sans toucher aux réglages.
+Au premier lancement, l'app demande la clé et le secret Flickr.
+
 ## Structure
 
 | Dossier | Contenu |

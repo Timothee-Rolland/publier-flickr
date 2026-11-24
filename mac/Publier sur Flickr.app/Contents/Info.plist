@@ -5,8 +5,8 @@
   <key>CFBundleName</key><string>Publier sur Flickr</string>
   <key>CFBundleDisplayName</key><string>Publier sur Flickr</string>
   <key>CFBundleIdentifier</key><string>fr.epy.publier-flickr</string>
-  <key>CFBundleVersion</key><string>2.1.0</string><!--v-->
-  <key>CFBundleShortVersionString</key><string>2.1.0</string><!--v-->
+  <key>CFBundleVersion</key><string>2.2.0</string><!--v-->
+  <key>CFBundleShortVersionString</key><string>2.2.0</string><!--v-->
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>lanceur</string>
   <key>CFBundleIconFile</key><string>icone</string>

@@ -1,29 +1,25 @@
 PUBLIER SUR FLICKR — installation
 
-1. Glisser « Publier sur Flickr » dans le dossier Applications
-   (éviter le Bureau : macOS y bloque l'accès aux fichiers).
+1. Ouvrir le Terminal (Cmd+Espace, taper « Terminal », Entrée).
 
-2. Premier lancement : double-cliquer sur l'app.
-   macOS indique qu'elle provient d'un développeur non identifié :
-   - macOS 15 et plus : Réglages Système → Confidentialité et sécurité → en bas, « Ouvrir quand même ».
-   - macOS 14 et avant : clic droit sur l'app → Ouvrir → Ouvrir.
+2. Coller cette ligne, puis Entrée :
 
-3. Si macOS demande d'installer les « outils de développement en ligne de commande »,
-   accepter (c'est ce qui fournit Python), puis relancer l'app.
+   curl -fsSL https://raw.githubusercontent.com/Timothee-Rolland/publier-flickr/main/installer.sh | bash
 
-4. L'app installe ses composants (1 à 3 minutes, connexion internet nécessaire).
+   L'installation prend 1 à 3 minutes. L'app est placée dans Applications,
+   son icône est ajoutée au Dock, puis elle s'ouvre toute seule.
 
-5. Elle demande ensuite la clé et le secret Flickr du groupe (à demander au
-   responsable du compte) : les coller puis « Vérifier et enregistrer ».
-   Ils restent uniquement sur ce Mac (modifiables ensuite via le bouton ⚙︎).
+3. Au premier lancement :
+   - coller la clé et le secret Flickr du groupe (à demander au responsable du compte),
+     puis « Vérifier et enregistrer » ;
+   - Flickr s'ouvre dans le navigateur : se connecter avec le compte du groupe
+     et cliquer sur « OK, I'll authorize it ».
 
-6. Flickr s'ouvre dans le navigateur : se connecter avec le compte Flickr du groupe
-   et cliquer sur « OK, I'll authorize it ». Ces étapes ne se font qu'une fois.
+C'est tout. Ensuite : cliquer sur l'icône dans le Dock.
+Les mises à jour s'installent toutes seules au lancement.
 
 Utilisation : glisser un dossier de photos dans la fenêtre. Un album par sous-dossier.
 Les photos sont envoyées en privé par défaut.
-
-Mises à jour : automatiques, au lancement (notification « Mise à jour installée »).
 
 Si les photos sont sur le Bureau et que l'app ne les voit pas :
 mettre le dossier ailleurs (Images, Documents…).

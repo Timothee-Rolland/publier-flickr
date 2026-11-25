@@ -13,12 +13,69 @@ import time
 import traceback
 from pathlib import Path
 
-import webview
-from webview.dom import DOMEventHandler
-
-import flickr_core as core
-
 ICI = Path(__file__).resolve().parent
+
+
+def relancer_dans_un_bundle():
+    """macOS identifie une app par son « bundle » (.app). Lancé tel quel, le Python embarqué
+    est vu comme « python3.12 » : nom et icône faux dans le Dock, et l'icône de la barre des
+    menus n'est jamais affichée. On relance donc le même Python depuis un petit bundle
+    « Publier sur Flickr.app » (Info.plist, icône, LSUIElement) créé dans Application Support.
+    À faire avant tout import d'AppKit."""
+    if sys.platform != "darwin" or os.environ.get("PF_BUNDLE") == "1":
+        return
+    exe = Path(sys.executable).resolve()
+    runtime = exe.parent.parent
+    version = f"python{sys.version_info[0]}.{sys.version_info[1]}"
+    if "Python.framework" in str(exe) or not (runtime / "lib" / version / "os.py").exists():
+        return  # Python non autonome (ancienne installation) : on ne touche à rien
+    try:
+        import plistlib
+        contents = ICI / "Publier sur Flickr.app" / "Contents"
+        macos, res = contents / "MacOS", contents / "Resources"
+        macos.mkdir(parents=True, exist_ok=True)
+        res.mkdir(exist_ok=True)
+        lib = contents / "lib"   # @executable_path/../lib et repère de la bibliothèque standard
+        if not lib.is_symlink() or os.readlink(lib) != str(runtime / "lib"):
+            if lib.is_symlink() or lib.exists():
+                lib.unlink()
+            lib.symlink_to(runtime / "lib")
+        cible = macos / "Publier sur Flickr"
+        if not cible.exists() or os.stat(cible).st_ino != os.stat(exe).st_ino:
+            if cible.exists():
+                cible.unlink()
+            try:
+                os.link(exe, cible)
+            except OSError:
+                shutil.copy2(exe, cible)
+        icns = res / "icone.icns"
+        if not icns.exists() and (ICI / "icone.png").exists():
+            try:
+                from PIL import Image
+                Image.open(ICI / "icone.png").save(icns)
+            except Exception:
+                pass
+        info = {"CFBundleName": "Publier sur Flickr", "CFBundleDisplayName": "Publier sur Flickr",
+                "CFBundleIdentifier": "fr.epy.publier-flickr.moteur",
+                "CFBundleExecutable": "Publier sur Flickr", "CFBundleIconFile": "icone",
+                "CFBundlePackageType": "APPL", "CFBundleVersion": "1",
+                "LSUIElement": True, "NSHighResolutionCapable": True}
+        fp = contents / "Info.plist"
+        if not fp.exists() or plistlib.loads(fp.read_bytes()) != info:
+            fp.write_bytes(plistlib.dumps(info))
+        env = dict(os.environ, PF_BUNDLE="1", PYTHONHOME=str(runtime))
+        os.execve(str(cible), [str(cible), str(Path(__file__).resolve()), *sys.argv[1:]], env)
+    except Exception as e:
+        print("bundle :", e, flush=True)
+
+
+if __name__ == "__main__":
+    relancer_dans_un_bundle()
+
+import webview  # noqa: E402  (après la relance dans le bundle)
+from webview.dom import DOMEventHandler  # noqa: E402
+
+import flickr_core as core  # noqa: E402
 
 
 PROTEGES = {"Desktop": "Bureau", "Documents": "Documents", "Downloads": "Téléchargements",
@@ -617,7 +674,7 @@ def creer_barre_menus(api):
                 api.montrer()   # double-clic sur l'app dans le Finder/Launchpad alors qu'elle tourne
                 return True
 
-            @objc.typedSelector(b"Q@:@")
+            @objc.typedSelector(b"I@:@")
             def applicationShouldTerminate_(self, app):
                 api._quitter = True      # Cmd+Q / Quitter : on quitte vraiment
                 core.deverrouiller()
@@ -674,6 +731,7 @@ def sur_fermeture(fenetre, api):
 
 
 def main():
+    print(f"processus : {sys.executable} (bundle={os.environ.get('PF_BUNDLE') == '1'})", flush=True)
     identite_macos()
     core.deverrouiller()  # au cas où un envoi précédent aurait été interrompu brutalement
     threading.Thread(target=nettoyer_cache, daemon=True).start()

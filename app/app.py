@@ -264,6 +264,19 @@ class Api:
         self._attente = len(etat["prets"])
         badge_et_barre(self, self._attente, bool(etat["nouveaux"]))
         self._js("surSurveillance", etat)
+        nouveaux = [x for x in etat["prets"] if x["nom"] in etat["nouveaux"]]
+        if nouveaux and self._barre is not None and not self._mode_dock:
+            def bulle():
+                try:
+                    from AppKit import NSApplication
+                    from webview.platforms.cocoa import BrowserView
+                    i = BrowserView.instances.get(self._fenetre.uid)
+                    devant = i is not None and i.window.isVisible() and NSApplication.sharedApplication().isActive()
+                    if not devant:       # fenêtre devant : la bannière de la fenêtre suffit
+                        self._barre.alerte(nouveaux)
+                except Exception:
+                    traceback.print_exc()
+            appel_principal(bulle)
 
     def rafraichir_surveillance(self):
         if self._surveillant:
@@ -647,17 +660,75 @@ def creer_barre_menus(api):
             def quitter_(self, _):
                 self.api.quitter()
 
+            # ---- bulle « nouvel album détecté » sous l'icône
+            def alerte(self, albums):
+                from AppKit import (NSPopover, NSViewController, NSView, NSTextField, NSButton,
+                                    NSFont, NSColor, NSMakeRect)
+                from Foundation import NSObject as _NSObject
+                _NSObject.cancelPreviousPerformRequestsWithTarget_(self)  # minuterie d'une bulle précédente
+                self.fermerBulle_(None)
+                self.albums_alerte = albums
+                n = len(albums)
+                titre = "Nouvel album détecté" if n == 1 else f"{n} nouveaux albums détectés"
+                detail = (f"{albums[0]['nom']} · {albums[0]['nb']} fichier{'s' if albums[0]['nb'] > 1 else ''}"
+                          if n == 1 else ", ".join(a["nom"] for a in albums[:3]) + ("…" if n > 3 else ""))
+                L, H = 320, 118
+                vue = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, L, H))
+                t = NSTextField.labelWithString_("📥 " + titre)
+                t.setFont_(NSFont.boldSystemFontOfSize_(13))
+                t.setFrame_(NSMakeRect(16, H - 34, L - 32, 18))
+                d = NSTextField.labelWithString_(detail)
+                d.setFont_(NSFont.systemFontOfSize_(12))
+                d.setTextColor_(NSColor.secondaryLabelColor())
+                d.setFrame_(NSMakeRect(16, H - 56, L - 32, 16))
+                d.cell().setTruncatesLastVisibleLine_(True)
+                b1 = NSButton.buttonWithTitle_target_action_(
+                    "Préparer l'album" if n == 1 else "Voir les albums", self, "preparer:")
+                b1.setKeyEquivalent_("\r")
+                b1.setFrame_(NSMakeRect(L - 16 - 150, 14, 150, 30))
+                b2 = NSButton.buttonWithTitle_target_action_("Plus tard", self, "fermerBulle:")
+                b2.setFrame_(NSMakeRect(L - 16 - 150 - 8 - 100, 14, 100, 30))
+                for v in (t, d, b1, b2):
+                    vue.addSubview_(v)
+                vc = NSViewController.alloc().init()
+                vc.setView_(vue)
+                self.bulle = NSPopover.alloc().init()
+                self.bulle.setContentViewController_(vc)
+                self.bulle.setBehavior_(0)   # reste affichée jusqu'à un choix (ou 60 s)
+                bouton = self.item.button()
+                self.bulle.showRelativeToRect_ofView_preferredEdge_(bouton.bounds(), bouton, 1)
+                self.performSelector_withObject_afterDelay_("fermerBulle:", None, 60.0)
+
+            def preparer_(self, _):
+                albums = getattr(self, "albums_alerte", [])
+                self.fermerBulle_(None)
+                self.api.montrer(sous_icone=True)
+                chemin = albums[0]["chemin"] if len(albums) == 1 else None
+                threading.Thread(target=lambda: self.api._js("ouvrirDepuisAlerte", chemin),
+                                 daemon=True).start()
+
+            def fermerBulle_(self, _):
+                b = getattr(self, "bulle", None)
+                if b is not None and b.isShown():
+                    b.close()
+                self.bulle = None
+
         api._barre = Barre.alloc().initAvecApi_(api)
 
         def verifier():
-            # Si l'icône n'est pas visible (encoche, barre pleine), l'app reste dans le Dock :
-            # sinon elle serait introuvable une fois la fenêtre masquée.
-            time.sleep(2)
-            vis = api._barre.visible()
-            print(f"barre des menus : créée, visible={vis}, cadre={api._barre.cadre_icone()}", flush=True)
-            if not vis:
-                api._mode_dock = True
-                appel_principal(lambda: passer_dans_le_dock(api))
+            # pywebview force le mode « app normale » (icône dans le Dock) à son démarrage :
+            # on repasse en app de barre des menus dès que l'icône du haut est bien visible.
+            # Si elle reste invisible (encoche, barre pleine, non autorisée dans les réglages),
+            # l'app reste dans le Dock : sinon elle serait introuvable une fois la fenêtre masquée.
+            vis = False
+            for attente in (1, 2, 3, 4):
+                time.sleep(attente)
+                vis = api._barre.visible()
+                if vis:
+                    break
+            print(f"barre des menus : visible={vis}, cadre={api._barre.cadre_icone()}", flush=True)
+            api._mode_dock = not vis
+            appel_principal(lambda: passer_dans_le_dock(api) if not vis else passer_dans_la_barre())
         threading.Thread(target=verifier, daemon=True).start()
     except Exception as e:
         print("barre des menus :", e, flush=True)
@@ -684,6 +755,16 @@ def creer_barre_menus(api):
     except Exception as e:
         print("délégué d'application :", e, flush=True)
         api._reouverture = False
+
+
+def passer_dans_la_barre():
+    try:
+        from AppKit import NSApplication
+        appli = NSApplication.sharedApplication()
+        appli.setActivationPolicy_(1)              # accessoire : pas d'icône dans le Dock
+        appli.activateIgnoringOtherApps_(True)     # garder la fenêtre au premier plan
+    except Exception:
+        traceback.print_exc()
 
 
 def passer_dans_le_dock(api):

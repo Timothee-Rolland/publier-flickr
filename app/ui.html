@@ -358,6 +358,16 @@ function rendreSurveillance(){
     if(a==="definitif"){ pywebview.api.ouvrir_reglages_acces(); }
   });
 }
+/* clic sur « Préparer l'album » dans la bulle de la barre des menus */
+async function ouvrirDepuisAlerte(chemin){
+  if(S.enCours){ toast("Publication en cours : le nouvel album vous attend dans l'écran d'accueil"); return; }
+  if(S.analyse && !S.termine && chemin){
+    // un album est en cours de préparation : on ne l'écrase pas
+    toast("Terminez d'abord l'album en cours : le nouveau vous attend dans l'écran d'accueil"); return;
+  }
+  if(!chemin){ S.termine=false; ecranDepot(); return; }
+  surAnalyse(await pywebview.api.analyser(chemin));
+}
 function surSurveillance(v){
   S.surv=v;
   rendreSurveillance();

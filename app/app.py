@@ -17,11 +17,14 @@ ICI = Path(__file__).resolve().parent
 
 
 def relancer_dans_un_bundle():
-    """macOS identifie une app par son « bundle » (.app). Lancé tel quel, le Python embarqué
-    est vu comme « python3.12 » : nom et icône faux dans le Dock, et l'icône de la barre des
-    menus n'est jamais affichée. On relance donc le même Python depuis un petit bundle
-    « Publier sur Flickr.app » (Info.plist, icône, LSUIElement) créé dans Application Support.
-    À faire avant tout import d'AppKit."""
+    """Démarrage en deux temps.
+
+    macOS (testé sur macOS 27) n'affiche l'icône de barre des menus d'une app lancée par
+    double-clic que si l'exécutable lancé par macOS est directement le programme (ici Python),
+    pas un script qui le lance ensuite. Or l'app installée démarre par un script (« lanceur »,
+    qui installe et met à jour). Ce premier processus crée donc un « moteur » : un bundle
+    « Publier sur Flickr.app » dans Application Support dont l'exécutable EST le Python embarqué,
+    le fait lancer par macOS (open), puis se termine. À faire avant tout import d'AppKit."""
     if sys.platform != "darwin" or os.environ.get("PF_BUNDLE") == "1":
         return
     exe = Path(sys.executable).resolve()
@@ -31,7 +34,8 @@ def relancer_dans_un_bundle():
         return  # Python non autonome (ancienne installation) : on ne touche à rien
     try:
         import plistlib
-        contents = ICI / "Publier sur Flickr.app" / "Contents"
+        bundle = ICI / "Publier sur Flickr.app"
+        contents = bundle / "Contents"
         macos, res = contents / "MacOS", contents / "Resources"
         macos.mkdir(parents=True, exist_ok=True)
         res.mkdir(exist_ok=True)
@@ -55,22 +59,50 @@ def relancer_dans_un_bundle():
                 Image.open(ICI / "icone.png").save(icns)
             except Exception:
                 pass
+        env = {"PF_BUNDLE": "1", "PYTHONHOME": str(runtime)}
+        for cle in ("SSL_CERT_FILE", "PF_APP"):
+            if os.environ.get(cle):
+                env[cle] = os.environ[cle]
         info = {"CFBundleName": "Publier sur Flickr", "CFBundleDisplayName": "Publier sur Flickr",
                 "CFBundleIdentifier": "fr.epy.publier-flickr.moteur",
                 "CFBundleExecutable": "Publier sur Flickr", "CFBundleIconFile": "icone",
-                "CFBundlePackageType": "APPL", "CFBundleVersion": "1",
-                "LSUIElement": True, "NSHighResolutionCapable": True}
+                "CFBundlePackageType": "APPL", "CFBundleVersion": "2",
+                "LSUIElement": True, "NSHighResolutionCapable": True, "LSEnvironment": env}
         fp = contents / "Info.plist"
         if not fp.exists() or plistlib.loads(fp.read_bytes()) != info:
             fp.write_bytes(plistlib.dumps(info))
-        env = dict(os.environ, PF_BUNDLE="1", PYTHONHOME=str(runtime))
-        os.execve(str(cible), [str(cible), str(Path(__file__).resolve()), *sys.argv[1:]], env)
+            subprocess.run(["/System/Library/Frameworks/CoreServices.framework/Frameworks/"
+                            "LaunchServices.framework/Support/lsregister", "-f", str(bundle)],
+                           capture_output=True, timeout=20)
+        args = [str(Path(__file__).resolve())]
+        if os.environ.get("PF_DISCRET") == "1" or "--discret" in sys.argv:
+            args.append("--discret")
+        # Si le moteur tourne déjà, macOS se contente de le réactiver (fenêtre réaffichée).
+        r = subprocess.run(["open", "-a", str(bundle), "--args", *args], capture_output=True, timeout=30)
+        if r.returncode == 0:
+            print("moteur lancé par macOS", flush=True)
+            sys.exit(0)
+        print("ouverture du moteur impossible :", r.stderr.decode(errors="ignore"), flush=True)
+    except SystemExit:
+        raise
     except Exception as e:
-        print("bundle :", e, flush=True)
+        print("moteur :", e, flush=True)
+
+
+def journal_moteur():
+    """Le moteur, lancé par macOS, n'a pas de sortie : on écrit dans le journal habituel."""
+    if os.environ.get("PF_BUNDLE") == "1" and not sys.stdout.isatty():
+        try:
+            f = open(ICI / "journal.txt", "a", buffering=1, encoding="utf-8")
+            sys.stdout = sys.stderr = f
+            print(f"=== {time.strftime('%c')} — moteur (pid {os.getpid()})", flush=True)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
     relancer_dans_un_bundle()
+    journal_moteur()
 
 import webview  # noqa: E402  (après la relance dans le bundle)
 from webview.dom import DOMEventHandler  # noqa: E402

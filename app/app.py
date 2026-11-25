@@ -665,10 +665,12 @@ def creer_barre_menus(api):
                 else:       # fenêtre
                     self.api.basculer_fenetre()
 
+            @objc.python_method
             def cadre_icone(self):
                 fen = self.item.button().window()
                 return fen.frame() if fen is not None else None
 
+            @objc.python_method
             def visible(self):
                 """Vrai si l'icône est réellement affichée (et pas cachée derrière l'encoche
                 ou faute de place dans la barre des menus)."""
@@ -679,6 +681,7 @@ def creer_barre_menus(api):
                 except Exception:
                     return False
 
+            @objc.python_method
             def mettre_a_jour(self, n):
                 self.item.button().setTitle_(f" {n}" if n else "")
                 self.info.setTitle_(f"{n} album{'s' if n > 1 else ''} en attente" if n else "Aucun album en attente")
@@ -693,6 +696,7 @@ def creer_barre_menus(api):
                 self.api.quitter()
 
             # ---- bulle « nouvel album détecté » sous l'icône
+            @objc.python_method
             def alerte(self, albums):
                 from AppKit import (NSPopover, NSViewController, NSView, NSTextField, NSButton,
                                     NSFont, NSColor, NSMakeRect)

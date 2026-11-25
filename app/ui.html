@@ -273,8 +273,8 @@ async function rendreReglagesSurv(r){
       <input type="checkbox" id="rsDemarrage" ${r.demarrage?"checked":""} ${r.app?"":"disabled"}>
       Ouvrir au démarrage du Mac, en arrière-plan (l'icône reste dans la barre des menus)</label>
     <p style="font-size:12px;margin-top:10px">${r.barre
-      ? "✓ Icône visible dans la barre des menus : fermer la fenêtre retire l'app du Dock, elle continue de surveiller en haut de l'écran."
-      : "⚠ L'icône n'est pas visible dans la barre des menus (souvent cachée par l'encoche ou faute de place) : fermer la fenêtre garde l'app dans le Dock. Libérez de la place dans la barre des menus puis relancez l'app."}</p>`;
+      ? "✓ L'app vit dans la barre des menus : clic sur son icône pour ouvrir ou masquer la fenêtre, clic droit pour le menu. Cmd+W masque la fenêtre (la surveillance continue), Cmd+Q quitte."
+      : "⚠ L'icône n'est pas visible dans la barre des menus (souvent cachée par l'encoche ou faute de place) : l'app s'affiche donc dans le Dock. Libérez de la place dans la barre des menus puis relancez l'app."}</p>`;
   $("#rsChoisir").onclick=async()=>rendreReglagesSurv(await pywebview.api.choisir_dossier_surveille());
   $("#rsOuvrir").onclick=()=>pywebview.api.ouvrir_dossier_surveille();
   $("#rsDemarrage").onchange=async e=>rendreReglagesSurv(await pywebview.api.definir_demarrage(e.target.checked));

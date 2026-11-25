@@ -127,6 +127,8 @@ class Api:
         self._quitter = False
         self._attente = 0
         self._reouverture = False
+        self._mode_dock = False   # vrai si l'icône de barre des menus est invisible
+        self._discret = False
 
     # ------------------------------------------------ outils
     def _js(self, fonction, donnees):
@@ -264,30 +266,44 @@ class Api:
         return self.reglages()
 
     # ------------------------------------------------ fenêtre
-    def montrer(self):
-        """Réaffiche la fenêtre (masquée ou réduite) et passe l'app au premier plan.
-        Passe directement par AppKit : window.show() de pywebview peut rester bloqué
-        si la fenêtre a démarré masquée."""
+    def montrer(self, sous_icone=False):
+        """Affiche la fenêtre au premier plan ; sous_icone : la place juste sous l'icône
+        de la barre des menus, comme un menu."""
         def f():
             try:
-                from AppKit import NSApplication, NSImage
+                from AppKit import NSApplication, NSScreen
                 from webview.platforms.cocoa import BrowserView
-                appli = NSApplication.sharedApplication()
-                if appli.activationPolicy() != 0:   # retour dans le Dock
-                    appli.setActivationPolicy_(0)
-                    image = NSImage.alloc().initWithContentsOfFile_(str(ICI / "icone.png"))
-                    if image is not None:
-                        appli.setApplicationIconImage_(image)
-                    appli.dockTile().setBadgeLabel_(str(self._attente) if self._attente else "")
                 i = BrowserView.instances.get(self._fenetre.uid) if self._fenetre else None
-                if i is not None:
-                    if i.window.isMiniaturized():
-                        i.window.deminiaturize_(None)
-                    i.window.makeKeyAndOrderFront_(None)
+                if i is None:
+                    return
+                w = i.window
+                if w.isMiniaturized():
+                    w.deminiaturize_(None)
+                cadre = self._barre.cadre_icone() if (sous_icone and self._barre) else None
+                if cadre is not None:
+                    ecran = (w.screen() or NSScreen.mainScreen()).visibleFrame()
+                    larg = w.frame().size.width
+                    x = cadre.origin.x + cadre.size.width - larg
+                    x = max(ecran.origin.x + 8, min(x, ecran.origin.x + ecran.size.width - larg - 8))
+                    w.setFrameTopLeftPoint_((x, ecran.origin.y + ecran.size.height - 4))
+                w.makeKeyAndOrderFront_(None)
                 NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
             except Exception:
                 traceback.print_exc()
         appel_principal(f)
+
+    def basculer_fenetre(self):
+        """Clic sur l'icône de la barre des menus : ouvre la fenêtre, ou la masque si elle est devant."""
+        try:
+            from AppKit import NSApplication
+            from webview.platforms.cocoa import BrowserView
+            i = BrowserView.instances.get(self._fenetre.uid)
+            if i is not None and i.window.isVisible() and NSApplication.sharedApplication().isActive():
+                i.window.orderOut_(None)
+                return
+        except Exception:
+            pass
+        self.montrer(sous_icone=True)
 
     def quitter(self):
         self._quitter = True
@@ -458,7 +474,7 @@ def identite_macos():
         if info is not None:
             info["CFBundleName"] = "Publier sur Flickr"
         appli = NSApplication.sharedApplication()
-        appli.setActivationPolicy_(0)  # app « normale » : Dock, menu, premier plan
+        appli.setActivationPolicy_(1)  # app de barre des menus : pas d'icône dans le Dock
         image = NSImage.alloc().initWithContentsOfFile_(str(ICI / "icone.png"))
         if image is not None:
             appli.setApplicationIconImage_(image)
@@ -499,10 +515,12 @@ def badge_et_barre(api, n, signaler):
 
 
 def creer_barre_menus(api):
-    """Icône dans la barre des menus : l'app continue de surveiller fenêtre fermée."""
+    """App de barre des menus : clic sur l'icône = ouvrir/masquer la fenêtre juste dessous ;
+    clic droit (ou ctrl-clic) = menu (albums en attente, dossier surveillé, Quitter)."""
     try:
         import objc
-        from AppKit import NSStatusBar, NSMenu, NSMenuItem, NSImage, NSVariableStatusItemLength
+        from AppKit import (NSApplication, NSStatusBar, NSMenu, NSMenuItem, NSImage,
+                            NSVariableStatusItemLength, NSEvent)
         from Foundation import NSObject, NSMakeSize
 
         class Barre(NSObject):
@@ -512,24 +530,42 @@ def creer_barre_menus(api):
                 self.item = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
                 self.item.setAutosaveName_("fr.epy.publier-flickr")
                 self.item.setVisible_(True)
+                bouton = self.item.button()
                 img = NSImage.alloc().initWithContentsOfFile_(str(ICI / "icone.png"))
                 if img is not None:
                     img.setSize_(NSMakeSize(18, 18))
-                    self.item.button().setImage_(img)
+                    bouton.setImage_(img)
                 else:
-                    self.item.button().setTitle_("Flickr")
-                menu = NSMenu.alloc().init()
+                    bouton.setTitle_("Flickr")
+                bouton.setToolTip_("Publier sur Flickr")
+                bouton.setTarget_(self)
+                bouton.setAction_("clic:")
+                bouton.sendActionOn_((1 << 2) | (1 << 4))  # clic gauche relâché | clic droit relâché
+                self.menu = NSMenu.alloc().init()
                 self.info = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Aucun album en attente", None, "")
-                menu.addItem_(self.info)
-                menu.addItem_(NSMenuItem.separatorItem())
-                for titre, action in (("Ouvrir Publier sur Flickr", "ouvrir:"),
-                                      ("Ouvrir le dossier surveillé", "dossier:"),
-                                      ("Quitter", "quitter:")):
-                    it = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(titre, action, "")
+                self.menu.addItem_(self.info)
+                self.menu.addItem_(NSMenuItem.separatorItem())
+                for titre, action, touche in (("Ouvrir Publier sur Flickr", "ouvrir:", ""),
+                                              ("Ouvrir le dossier surveillé", "dossier:", ""),
+                                              ("Quitter", "quitter:", "q")):
+                    it = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(titre, action, touche)
                     it.setTarget_(self)
-                    menu.addItem_(it)
-                self.item.setMenu_(menu)
+                    self.menu.addItem_(it)
                 return self
+
+            def clic_(self, _):
+                ev = NSApplication.sharedApplication().currentEvent()
+                droit = ev is not None and (ev.type() == 4 or (ev.modifierFlags() & (1 << 18)))
+                if droit:   # menu
+                    self.item.setMenu_(self.menu)
+                    self.item.button().performClick_(None)
+                    self.item.setMenu_(None)
+                else:       # fenêtre
+                    self.api.basculer_fenetre()
+
+            def cadre_icone(self):
+                fen = self.item.button().window()
+                return fen.frame() if fen is not None else None
 
             def visible(self):
                 """Vrai si l'icône est réellement affichée (et pas cachée derrière l'encoche
@@ -546,7 +582,7 @@ def creer_barre_menus(api):
                 self.info.setTitle_(f"{n} album{'s' if n > 1 else ''} en attente" if n else "Aucun album en attente")
 
             def ouvrir_(self, _):
-                self.api.montrer()
+                self.api.montrer(sous_icone=True)
 
             def dossier_(self, _):
                 self.api.ouvrir_dossier_surveille()
@@ -556,18 +592,21 @@ def creer_barre_menus(api):
 
         api._barre = Barre.alloc().initAvecApi_(api)
 
-        def diagnostic():
+        def verifier():
+            # Si l'icône n'est pas visible (encoche, barre pleine), l'app reste dans le Dock :
+            # sinon elle serait introuvable une fois la fenêtre masquée.
             time.sleep(2)
-            try:
-                fen = api._barre.item.button().window()
-                print(f"barre des menus : créée, visible={api._barre.visible()}, "
-                      f"cadre={fen.frame() if fen is not None else None}", flush=True)
-            except Exception as e:
-                print("barre des menus (diagnostic) :", e, flush=True)
-        threading.Thread(target=diagnostic, daemon=True).start()
+            vis = api._barre.visible()
+            print(f"barre des menus : créée, visible={vis}, cadre={api._barre.cadre_icone()}", flush=True)
+            if not vis:
+                api._mode_dock = True
+                appel_principal(lambda: passer_dans_le_dock(api))
+        threading.Thread(target=verifier, daemon=True).start()
     except Exception as e:
         print("barre des menus :", e, flush=True)
-    try:  # clic sur l'icône du Dock quand la fenêtre est masquée : on la réaffiche
+        api._mode_dock = True
+        passer_dans_le_dock(api)
+    try:
         import objc
         from webview.platforms.cocoa import BrowserView
 
@@ -575,25 +614,46 @@ def creer_barre_menus(api):
         class AppDelegate(objc.Category(BrowserView.AppDelegate)):
             @objc.typedSelector(b"Z@:@Z")
             def applicationShouldHandleReopen_hasVisibleWindows_(self, app, visibles):
-                api.montrer()
+                api.montrer()   # double-clic sur l'app dans le Finder/Launchpad alors qu'elle tourne
                 return True
+
+            @objc.typedSelector(b"Q@:@")
+            def applicationShouldTerminate_(self, app):
+                api._quitter = True      # Cmd+Q / Quitter : on quitte vraiment
+                core.deverrouiller()
+                return 1                 # NSTerminateNow
 
         api._reouverture = True
     except Exception as e:
-        print("réouverture Dock :", e, flush=True)
+        print("délégué d'application :", e, flush=True)
         api._reouverture = False
+
+
+def passer_dans_le_dock(api):
+    try:
+        from AppKit import NSApplication, NSImage
+        appli = NSApplication.sharedApplication()
+        appli.setActivationPolicy_(0)
+        image = NSImage.alloc().initWithContentsOfFile_(str(ICI / "icone.png"))
+        if image is not None:
+            appli.setApplicationIconImage_(image)
+    except Exception:
+        traceback.print_exc()
 
 
 def au_demarrage(fenetre, api):
     fenetre.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
     fenetre.dom.document.events.drop += DOMEventHandler(api.sur_depot, True, True)
     appel_principal(lambda: creer_barre_menus(api))
+    if not api._discret:  # premier affichage : sous l'icône de la barre des menus
+        appel_principal(lambda: api.montrer(sous_icone=True))
     api._surveillant = Surveillant(api)
     api._surveillant.start()
 
 
 def sur_fermeture(fenetre, api):
-    """Fermer la fenêtre la masque : la surveillance continue (Quitter : Cmd+Q ou barre des menus)."""
+    """Cmd+W / bouton rouge : la fenêtre est masquée, la surveillance continue.
+    Cmd+Q ou « Quitter » : on quitte vraiment (api._quitter)."""
     if api._quitter:
         return True
 
@@ -603,17 +663,10 @@ def sur_fermeture(fenetre, api):
             i = BrowserView.instances.get(fenetre.uid)
             if i is None:
                 return
-            from AppKit import NSApplication
-            if api._barre is not None and api._barre.visible():
-                # fonctionnement « barre des menus » : plus d'icône dans le Dock
-                i.window.orderOut_(None)
-                NSApplication.sharedApplication().setActivationPolicy_(1)  # accessoire
-            elif api._reouverture:
-                i.window.orderOut_(None)        # masquée : le clic sur le Dock la réaffiche
-            else:
+            if api._mode_dock and not api._reouverture:
                 i.window.miniaturize_(None)     # secours : réduite dans le Dock, toujours récupérable
-            print(f"fenêtre fermée : barre visible={api._barre.visible() if api._barre else None}, "
-                  f"réouverture Dock={api._reouverture}", flush=True)
+            else:
+                i.window.orderOut_(None)
         except Exception:
             traceback.print_exc()
     appel_principal(masquer)
@@ -630,6 +683,7 @@ def main():
         "Publier sur Flickr", url=str(ICI / "ui.html"), js_api=api,
         width=1040, height=760, min_size=(820, 560), hidden=discret)
     api._fenetre = fenetre
+    api._discret = discret
     fenetre.events.closing += lambda: sur_fermeture(fenetre, api)
     webview.start(au_demarrage, (fenetre, api))
 
